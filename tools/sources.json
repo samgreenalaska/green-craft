@@ -1,0 +1,16 @@
+{
+  "_comment": [
+    "Explicit download sources for content that is NOT on Modrinth.",
+    "update_manifest.py resolves every file by sha512 against Modrinth first; anything",
+    "that misses is looked up here. A miss with no entry is a hard error -- the tool will",
+    "not emit a manifest with a file it cannot tell friends how to download.",
+    "",
+    "Keys for mods are the fabric.mod.json 'id'. Keys for anything else are the filename.",
+    "{version} and {filename} are substituted from the jar itself, so a version bump",
+    "needs no edit here."
+  ],
+
+  "voxymap": {
+    "url": "https://github.com/samgreenalaska/voxymap/releases/download/v{version}/{filename}"
+  }
+}

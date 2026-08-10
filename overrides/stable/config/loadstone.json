@@ -1,0 +1,8 @@
+{
+  "hudOpacity": "PERCENT_100",
+  "hudSize": "PERCENT_100",
+  "hudLocation": "CENTER_TOP",
+  "tintedLoaders": true,
+  "interactionParticles": true,
+  "ambientParticles": "HIGH"
+}

@@ -1,0 +1,58 @@
+{
+  "version": 3,
+  "debugEnabled": false,
+  "teleporting": {
+    "delay": 0,
+    "cooldown": 3,
+    "preloadEnabled": false,
+    "preloadRadiusChunks": 1,
+    "defaultSafetyCheck": false,
+    "teleportEffects": true,
+    "restoreRotation": true
+  },
+  "back": {
+    "enabled": true,
+    "deleteAfterTeleport": true
+  },
+  "home": {
+    "enabled": true,
+    "playerMaximum": 10,
+    "deleteInvalid": false,
+    "temporaryHomeTtlSeconds": 604800,
+    "sharedHomeMaximum": 1,
+    "sharedHomeBroadcastCooldownSeconds": 60
+  },
+  "tpa": {
+    "enabled": true,
+    "requestExpireTime": 120
+  },
+  "warp": {
+    "enabled": true,
+    "maximum": 0,
+    "deleteInvalid": false
+  },
+  "worldSpawn": {
+    "enabled": true,
+    "world_id": "minecraft:overworld"
+  },
+  "rtp": {
+    "enabled": true,
+    "maxRadius": 32,
+    "minRadius": 4
+  },
+  "wild": {
+    "enabled": true,
+    "minRadius": 512,
+    "maxRadius": 4096
+  },
+  "xaero": {
+    "enabled": true,
+    "syncIntervalSeconds": 10,
+    "persistWaypointSets": true,
+    "warpSetName": "Default",
+    "homeSetName": "Default"
+  },
+  "storage": {
+    "autoSaveIntervalSeconds": 15
+  }
+}

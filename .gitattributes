@@ -1,0 +1,14 @@
+# Default: normalise to LF in the repository.
+* text=auto eol=lf
+
+# The overrides tree ships byte-for-byte and its zip sha512 is advertised in
+# manifest.json. If git rewrites line endings here, a rebuild on a fresh clone
+# produces a different hash than the manifest claims and every friend's updater
+# rejects the bundle. Treat as binary so it round-trips exactly.
+/overrides/** -text
+
+# Deployed to wheatley (Linux) and run by bash. CRLF makes bash fail on the \r.
+/tools/mc-channel text eol=lf
+
+# Windows batch files want CRLF.
+*.bat text eol=crlf

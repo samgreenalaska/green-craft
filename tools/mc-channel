@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# mc-channel -- switch the active Minecraft server between the stable and
+# experimental GreenCraft channels.
+#
+# Only one server can run at a time: they share the :25565 bind and the mc
+# screen session, and the box has 3.2 GB. The active-server symlink selects
+# which one minecraft.service launches.
+#
+# Always goes through systemd. A hand-started server gets a 3G heap instead of
+# the 2G that heap.conf sets, and leaves minecraft.service reading inactive
+# while a world is up -- see wheatley/CLAUDE.md.
+set -euo pipefail
+
+MC="$HOME/Desktop/Minecraft"
+DASH="http://100.92.154.56:8080/api/current"
+
+usage() {
+  echo "usage: mc-channel [status|stable|experimental] [--force]" >&2
+  exit 1
+}
+
+current_channel() {
+  local t
+  t=$(readlink -f "$MC/active-server" 2>/dev/null) || { echo "unknown"; return; }
+  basename "$t" | sed 's/^server-//'
+}
+
+players_online() {
+  # Prints "<count> <names>"; prints "? " if the dashboard is unreachable.
+  # The dashboard reports players as null between polls (e.g. just after a
+  # restart). That must read as unknown, not as zero -- bash would evaluate a
+  # bare "None" as 0 in an arithmetic test and wave the switch through.
+  curl -sf --max-time 5 "$DASH" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    mc = json.load(sys.stdin).get("mc") or {}
+except Exception:
+    print("? "); sys.exit(0)
+p = mc.get("players")
+print(p if isinstance(p, int) else "?", ",".join(mc.get("names") or []))
+' 2>/dev/null || echo "? "
+}
+
+target="${1:-status}"
+force=""
+[[ "${2:-}" == "--force" ]] && force=1
+
+case "$target" in
+  status)
+    echo "channel: $(current_channel)"
+    echo "service: $(systemctl is-active minecraft)"
+    read -r n names <<<"$(players_online)"
+    echo "players: ${n:-?} ${names:-}"
+    exit 0
+    ;;
+  stable|experimental) ;;
+  *) usage ;;
+esac
+
+dir="$MC/server-$target"
+[[ -d "$dir" ]] || { echo "no such server directory: $dir" >&2; exit 1; }
+
+if [[ "$(current_channel)" == "$target" ]] && systemctl is-active --quiet minecraft; then
+  echo "already on $target and running"
+  exit 0
+fi
+
+# Don't drop players without saying so.
+read -r n names <<<"$(players_online)"
+if [[ -n "$force" ]]; then
+  :
+elif [[ "$n" == "?" ]]; then
+  echo "WARNING: dashboard unreachable, cannot check for players." >&2
+  echo "Re-run with --force if you're sure nobody is online." >&2
+  exit 1
+elif [[ "${n:-0}" -gt 0 ]]; then
+  echo "REFUSING: $n player(s) online: ${names}" >&2
+  echo "Switching channels stops the server. Re-run with --force to do it anyway." >&2
+  exit 1
+fi
+
+echo "switching $(current_channel) -> $target"
+sudo systemctl stop minecraft
+ln -sfn "$dir" "$MC/active-server"
+sudo systemctl start minecraft
+
+# Wait for it to actually come up rather than reporting success on a start that failed.
+for _ in $(seq 1 30); do
+  sleep 2
+  if grep -q 'Done (' "$dir/logs/latest.log" 2>/dev/null; then
+    echo "up on $target: $(grep -o 'motd=.*' "$dir/server.properties")"
+    exit 0
+  fi
+done
+
+echo "started, but no 'Done (' in the log after 60s -- check:" >&2
+echo "  tail -40 $dir/logs/latest.log" >&2
+exit 1

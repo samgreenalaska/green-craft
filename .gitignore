@@ -1,0 +1,21 @@
+# Ignore everything by default, then explicitly allow only what should be published.
+# Friends' updaters fetch this repo unauthenticated, so nothing lands here by accident.
+/*
+
+!/manifest.json
+!/overrides/
+!/updater/
+!/installer/
+!/tools/
+!/LICENSE
+!/README.md
+!/.gitignore
+!/.gitattributes
+
+# dist/ holds built release assets (overrides zips, GreenCraft.exe). Those are uploaded
+# to GitHub Releases by publish.bat, not committed -- the source of truth is overrides/.
+# It is already excluded by /* above; named here so the intent is obvious.
+/dist/
+
+# PLAN.md is working notes, not a published artifact.
+/PLAN.md
