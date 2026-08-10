@@ -274,31 +274,33 @@ def uninstall_program(pattern, log=print, quiet=True):
 
 
 def uninstall(remove_game_data=False, log=print):
-    state = load_state()
-    log("Removing shortcuts...")
-    for s in remove_shortcuts():
-        log(f"  removed {Path(s).name}")
+    """Remove GreenCraft's own footprint: shortcuts, registry entry, cache.
 
-    log("Removing Apps & Features entry...")
-    log("  removed" if unregister_uninstall() else "  (was not registered)")
+    Says nothing about game data and prints no closing summary -- uninstall_selected()
+    calls this as one step among several and then deletes the instance itself. An
+    earlier version announced "Keeping game data" and "GreenCraft has been uninstalled"
+    here, and the caller then deleted the instance anyway, so the log stated the
+    opposite of what happened and claimed to be finished while still working.
+    """
+    state = load_state()
+    log("removing shortcuts...")
+    for s in remove_shortcuts():
+        log(f"  {Path(s).name}")
+
+    log("removing Apps & Features entry...")
+    log("  done" if unregister_uninstall() else "  (was not registered)")
 
     if remove_game_data:
         for d in instance_dirs(state):
-            log(f"Removing instance {d.name} (including any worlds)...")
+            log(f"removing instance {d.name} (including any worlds)...")
             shutil.rmtree(d, ignore_errors=True)
-    else:
-        kept = [d.name for d in instance_dirs(state)]
-        if kept:
-            log(f"Keeping game data: {', '.join(kept)}")
 
     if CACHE_DIR.is_dir():
-        log("Removing download cache...")
+        log("removing download cache...")
         shutil.rmtree(CACHE_DIR, ignore_errors=True)
 
     state["installed"] = False
     save_state(state)
-    log()
-    log("GreenCraft has been uninstalled.")
 
 
 def prism_data_dir():
@@ -352,9 +354,18 @@ def uninstall_selected(opts, log=print):
                 log(f"    {d.name}")
                 shutil.rmtree(d, ignore_errors=True)
 
+        # Don't leave install.json claiming instances that no longer exist -- anything
+        # reading that field later would try to clean up directories that are gone.
+        st = load_state()
+        st["instances"] = []
+        st["channels"] = []
+        save_state(st)
+        log("  GreenCraft removed")
+
     if opts.get("prism"):
         log("Removing Prism Launcher...")
         uninstall_program("Prism Launcher", log)
+        _sweep_prism_program_dir(log)
 
         size, others = prism_leftovers(state)
         if others:
@@ -372,6 +383,31 @@ def uninstall_selected(opts, log=print):
 
     log()
     log("Done.")
+
+
+def _sweep_prism_program_dir(log):
+    """Clear what Prism's own uninstaller leaves behind.
+
+    Measured on a real uninstall: prismlauncher.exe and the registry key go, but
+    ~11.7 MB remains -- the bundled vc_redist installer, qtlogging.ini, and Prism's
+    own uninstall.exe (an NSIS uninstaller generally cannot delete itself in place).
+    """
+    d = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "PrismLauncher"
+    if not d.is_dir():
+        return
+    left = [p for p in d.rglob("*") if p.is_file()]
+    if not left:
+        shutil.rmtree(d, ignore_errors=True)
+        return
+    size = sum(p.stat().st_size for p in left)
+    if (d / "prismlauncher.exe").exists():
+        # The uninstaller did not actually run; do not delete a working install.
+        log(f"  prismlauncher.exe is still present - leaving {d} alone")
+        return
+    log(f"  clearing {len(left)} leftover file(s), {size / 1024 ** 2:.1f} MB")
+    shutil.rmtree(d, ignore_errors=True)
+    if d.exists():
+        log("  (some files were locked and remain; they are inert)")
 
 
 def _rescue_worlds(dirs, log):

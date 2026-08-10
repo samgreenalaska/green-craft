@@ -68,8 +68,8 @@ class SetupWindow:
         self.root = tk.Tk()
         self.root.title(title)
         _style(self.root)
-        _centre(self.root, 560, 480)
-        self.root.minsize(520, 440)
+        _centre(self.root, 580, 620)
+        self.root.minsize(560, 560)
         try:
             self.root.iconbitmap(_icon_path())
         except Exception:
@@ -82,6 +82,19 @@ class SetupWindow:
     # ---------------------------------------------------------------- options
     def _build_options(self):
         f = self.frame
+
+        # Pack the buttons FIRST, anchored to the bottom, so they always get their
+        # space. tkinter allocates in packing order, so building content first meant
+        # adding the invite field squeezed the row down to unlabelled slivers.
+        row = ttk.Frame(f)
+        row.pack(side="bottom", fill="x", pady=(20, 0))
+        ttk.Button(row, text="Cancel", command=self.root.destroy).pack(side="right", padx=(8, 0))
+        ttk.Button(row, text="Install", style="Accent.TButton",
+                   command=self._start).pack(side="right")
+        if self.show_uninstall:
+            ttk.Button(row, text="Uninstall...",
+                       command=self._open_uninstall).pack(side="left")
+
         ttk.Label(f, text="GreenCraft", style="Title.TLabel").pack(anchor="w")
         ttk.Label(f, text="Modded Minecraft, set up for you.",
                   style="Muted.TLabel").pack(anchor="w", pady=(2, 16))
@@ -120,15 +133,6 @@ class SetupWindow:
         ttk.Label(f, text="       For testing upcoming updates. Leave this off unless\n"
                           "       you have been asked to try something.",
                   style="Muted.TLabel").pack(anchor="w")
-
-        row = ttk.Frame(f)
-        row.pack(side="bottom", fill="x", pady=(20, 0))
-        ttk.Button(row, text="Cancel", command=self.root.destroy).pack(side="right", padx=(8, 0))
-        ttk.Button(row, text="Install", style="Accent.TButton",
-                   command=self._start).pack(side="right")
-        if self.show_uninstall:
-            ttk.Button(row, text="Uninstall...",
-                       command=self._open_uninstall).pack(side="left")
 
     # --------------------------------------------------------------- progress
     def _build_progress(self):
@@ -215,6 +219,16 @@ class SetupWindow:
         for w in self.frame.winfo_children():
             w.destroy()
         f = self.frame
+
+        # Buttons first so they always keep their space -- same reason as the options
+        # screen, and this one grows by a whole checkbox when saved worlds exist.
+        row = ttk.Frame(f)
+        row.pack(side="bottom", fill="x", pady=(18, 0))
+        ttk.Button(row, text="Back", command=self._back_to_options).pack(side="left")
+        ttk.Button(row, text="Cancel", command=self.root.destroy).pack(side="right", padx=(8, 0))
+        ttk.Button(row, text="Remove", style="Accent.TButton",
+                   command=self._start_uninstall).pack(side="right")
+
         ttk.Label(f, text="Uninstall", style="Title.TLabel").pack(anchor="w")
         ttk.Label(f, text="Choose what to remove.",
                   style="Muted.TLabel").pack(anchor="w", pady=(2, 14))
@@ -253,13 +267,6 @@ class SetupWindow:
         ttk.Label(f, text="       Other things may rely on these. Windows will ask for\n"
                           "       permission before removing Tailscale.",
                   style="Muted.TLabel").pack(anchor="w")
-
-        row = ttk.Frame(f)
-        row.pack(side="bottom", fill="x", pady=(18, 0))
-        ttk.Button(row, text="Back", command=self._back_to_options).pack(side="left")
-        ttk.Button(row, text="Cancel", command=self.root.destroy).pack(side="right", padx=(8, 0))
-        ttk.Button(row, text="Remove", style="Accent.TButton",
-                   command=self._start_uninstall).pack(side="right")
 
     def _toggle_all(self):
         v = self.u_all.get()

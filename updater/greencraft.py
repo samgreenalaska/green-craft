@@ -268,6 +268,11 @@ def ensure_instance(inst_root, channel_name, deps, java_args):
         lines.append(f"OverrideJavaArgs={'true' if rest else 'false'}")
         if rest:
             lines.append(f"JvmArgs={rest}")
+        # Prism compares the heap cap against *free* RAM, not installed RAM, so a
+        # 4 GB cap on a busy 16 GB machine raises "there might not be enough free RAM
+        # ... this may cause slowdowns in your system" before the user has played a
+        # second. The cap is deliberate and sized for this pack; the warning is noise.
+        lines.append("LowMemWarning=false")
         cfg.write_text("\n".join(lines) + "\n", encoding="utf-8")
         created_cfg = True
     else:
@@ -329,10 +334,37 @@ def save_lock(mcdir, lock):
 # ---------------------------------------------------------------------------- sync
 
 
+def wanted_files(channel, platform_name=None):
+    """The files that belong on THIS machine.
+
+    A file may carry "platforms": ["x64"] to mean "only install here on x64". Absent
+    means every platform. This is how the ARM64 variant is expressed -- as six
+    exclusions on the shared list rather than a duplicated channel, so the two can
+    never drift apart, and an ARM-only addition is just "platforms": ["arm64"].
+    """
+    if platform_name is None:
+        import prereq
+        platform_name = prereq.arch()
+    out = {}
+    for f in channel["pack"]["files"]:
+        plats = f.get("platforms")
+        if plats and platform_name not in plats:
+            continue
+        out[f["path"]] = f
+    return out
+
+
+def excluded_here(channel, platform_name):
+    return [
+        f["path"] for f in channel["pack"]["files"]
+        if f.get("platforms") and platform_name not in f["platforms"]
+    ]
+
+
 def sync(channel, mcdir, dry_run=False):
     lock = load_lock(mcdir)
     owned = lock["files"]
-    wanted = {f["path"]: f for f in channel["pack"]["files"]}
+    wanted = wanted_files(channel)
 
     added, updated, kept, skipped, removed = [], [], [], [], []
 
@@ -421,6 +453,33 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
     import install as inst
     import prereq
 
+    # ARM64 Windows cannot run this pack. Measured on a Snapdragon X / Adreno X1-85,
+    # 2026-08-10. Startup is NOT the problem -- the game reaches the title screen and
+    # the server shows in Multiplayer. It breaks on joining a world, twice over:
+    #
+    #   1. voxy bundles RocksDB, whose JNI jar ships x86-64 natives only (verified by
+    #      listing META-INF/jars inside voxy-0.2.18-beta.jar: linux64 .so and win64 .dll,
+    #      no aarch64). Joining any world throws UnsatisfiedLinkError, "Can't load
+    #      AMD 64-bit .dll on a ARM 64-bit platform".
+    #   2. Even with voxy disabled, the Windows-on-ARM OpenGL stack cannot sustain a
+    #      world. Microsoft OpenGLOn12, Mesa Zink and Mesa D3D12 all fault identically
+    #      in glBufferSubData; with Sodium's KHR_no_error context disabled it hangs on
+    #      a GPU fence instead. Three independent implementations, same fault --
+    #      upstream and unfixed (microsoft/OpenCLOn12#68, MCRcortex/voxy#538 closed as
+    #      not planned).
+    #
+    # Shaders are separately impossible: the Adreno exposes 32 KB of compute shared
+    # memory and the bundled pack wants ~36 KB, so Iris disables them.
+    #
+    # An earlier version of this comment blamed a Fabric preLaunch ClassCastException.
+    # That was a test-harness artifact, not ARM64 -- see PLAN.md 8.5.
+    if prereq.arch() == "arm64":
+        log("ARM processor detected - using the ARM mod set.")
+        log("Sodium, Iris (shaders), Nvidium, voxy (distant terrain) and Xaero's")
+        log("World Map are left out: the Windows-on-ARM graphics driver crashes on")
+        log("them. The minimap and everything else work normally.")
+        log()
+
     log("Fetching the mod list...")
     m = load_manifest(manifest_src)
     prereqs = m.get("prerequisites", {})
@@ -459,6 +518,7 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
                 "and run GreenCraft again."
             )
         log(f"  installed: {prism}")
+    prereq.seed_prism_config(log)
 
     channels = ["stable"] + (["experimental"] if opts.get("experimental") else [])
     instances = []
@@ -513,8 +573,14 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
 
     log()
     log("Done. GreenCraft is ready.")
-    log("Minecraft will open on the title screen -- pick GreenCraft from Multiplayer")
-    log("when you are ready to join.")
+    log()
+    # Measured on a clean machine: Prism then downloads Minecraft itself, several
+    # hundred MB across a few thousand files, taking minutes with no obvious progress.
+    # Without warning, a first-timer concludes it has hung and kills it.
+    log("The first launch downloads Minecraft itself and can take several minutes.")
+    log("Later launches are quick.")
+    log("Sign in with your Microsoft account when Prism asks, then pick GreenCraft")
+    log("from Multiplayer once the title screen appears.")
     return {"instances": instances}
 
 
@@ -614,7 +680,25 @@ def run_uninstall_gui(quiet=False):
 def main():
     ap = argparse.ArgumentParser(description="Sync a Prism instance to a GreenCraft channel.")
     ap.add_argument("--setup", action="store_true", help="force the first-run wizard")
+    ap.add_argument("--install", action="store_true",
+                    help="run setup headlessly, no window (for scripted testing)")
+    ap.add_argument("--experimental", action="store_true",
+                    help="with --install: also set up the experimental channel")
+    ap.add_argument("--no-desktop", action="store_true",
+                    help="with --install: skip the desktop shortcut")
+    ap.add_argument("--start-menu", action="store_true",
+                    help="with --install: add Start Menu shortcuts")
+    ap.add_argument("--invite", default="",
+                    help="with --install: Tailscale invite URL to open")
+    ap.add_argument("--allow-unsupported", action="store_true",
+                    help="with --install: proceed on unsupported hardware (ARM64), "
+                         "for diagnostics only")
     ap.add_argument("--uninstall", action="store_true", help="remove GreenCraft")
+    ap.add_argument("--components", default="",
+                    help="with --uninstall --quiet: comma-separated list of "
+                         "greencraft,prism,tailscale,all")
+    ap.add_argument("--keep-worlds", action="store_true",
+                    help="with --uninstall: move saved worlds to Documents first")
     ap.add_argument("--quiet", action="store_true", help="with --uninstall: no window")
     ap.add_argument("--channel", default="stable", choices=["stable", "experimental"])
     ap.add_argument("--manifest", default=DEFAULT_MANIFEST, help="URL or local path")
@@ -630,7 +714,36 @@ def main():
     import install as inst
 
     if args.uninstall:
-        return run_uninstall_gui(args.quiet)
+        if args.quiet or args.components:
+            names = [c.strip().lower() for c in args.components.split(",") if c.strip()]
+            everything = "all" in names
+            opts = {
+                "greencraft": everything or not names or "greencraft" in names,
+                "prism": everything or "prism" in names,
+                "tailscale": everything or "tailscale" in names,
+                "keep_worlds": args.keep_worlds,
+            }
+            log(f"Uninstalling: {', '.join(k for k, v in opts.items() if v and k != 'keep_worlds')}")
+            inst.uninstall_selected(opts, log)
+            return 0
+        return run_uninstall_gui(False)
+
+    if args.install:
+        # Headless equivalent of the wizard. Exists so a scripted session can exercise
+        # the whole first-run path without anyone clicking buttons.
+        opts = {
+            "desktop": not args.no_desktop,
+            "start_menu": args.start_menu,
+            "experimental": args.experimental,
+            "invite": args.invite,
+            "allow_unsupported": args.allow_unsupported,
+        }
+        try:
+            do_install(opts, log, args.manifest)
+        except Exception as e:
+            log(f"\nINSTALL FAILED: {type(e).__name__}: {e}")
+            return 1
+        return 0
 
     # No arguments means someone ran the exe directly rather than via a shortcut, so
     # they want to set something up or take it away -- not to start the game. Playing

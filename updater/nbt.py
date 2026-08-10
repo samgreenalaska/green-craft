@@ -224,10 +224,22 @@ def upsert_server(path, name, ip):
         # The client adds its own quick-play entry each time it connects, so several
         # can accumulate for one address. Collapse them into one.
         entry = mine[0]
+        was = (
+            entry.get("name", {}).get("value"),
+            entry.get("ip", {}).get("value"),
+            entry.get("hidden", {}).get("value"),
+        )
         entry["name"] = {"__tag__": TAG_STRING, "value": name}
         entry["ip"] = {"__tag__": TAG_STRING, "value": ip}
         entry["hidden"] = {"__tag__": TAG_BYTE, "value": 0}
-        result = "updated" if len(mine) == 1 else f"updated (removed {len(mine) - 1} duplicate)"
+        if len(mine) > 1:
+            result = f"updated (removed {len(mine) - 1} duplicate)"
+        elif was == (name, ip, 0) and len(servers) == len(others) + 1:
+            # Report honestly on a no-op run. Saying "updated" when nothing changed
+            # makes an idempotent sync look like it wrote something.
+            result = "unchanged"
+        else:
+            result = "updated"
     else:
         entry = server_entry(name, ip)
         result = "added"

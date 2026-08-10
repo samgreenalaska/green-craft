@@ -71,6 +71,23 @@ for ch, c in m.get("channels", {}).items():
     else:
         if not lc.get("downloads") or not (lc.get("hashes") or {}).get("sha512"):
             errors.append(f"{ch}: launcher.version set but downloads/sha512 incomplete")
+        else:
+            # The advertised launcher must match the exe about to be uploaded,
+            # otherwise every client self-updates to a binary that fails its own
+            # hash check.
+            exe = os.path.join(REPO, "dist", lc.get("filename", "GreenCraft.exe"))
+            if not os.path.exists(exe):
+                errors.append(f"{ch}: launcher.version set but dist/{lc.get('filename')} missing")
+            else:
+                d = open(exe, "rb").read()
+                if hashlib.sha512(d).hexdigest() != lc["hashes"]["sha512"]:
+                    errors.append(f"{ch}: dist/{lc['filename']} does not match launcher.sha512")
+                elif len(d) != lc.get("fileSize"):
+                    errors.append(f"{ch}: dist/{lc['filename']} size != launcher.fileSize")
+                else:
+                    print(f"ok    {ch}: launcher v{lc['version']} matches dist/{lc['filename']}")
+            if f"/v{c.get('versionId')}/" not in lc["downloads"][0]:
+                errors.append(f"{ch}: launcher URL tag does not match versionId")
 
 # 6. every pack file has a hash and a download
 for ch, c in m.get("channels", {}).items():

@@ -29,7 +29,7 @@
   },
   "channels": {
     "stable": {
-      "versionId": "0.0.0",
+      "versionId": "0.1.0",
       "promotedFrom": "0.0.0",
       "server": {
         "name": "GreenCraft",
@@ -40,23 +40,25 @@
       "javaArgs": "-Xmx4G",
       "minUpdaterVersion": "1.0.0",
       "launcher": {
-        "version": null,
+        "version": "0.1.0",
         "filename": "GreenCraft.exe",
         "hashes": {
-          "sha1": null,
-          "sha512": null
+          "sha1": "68e37afd14369fbac20fb85af561b663fbc613e1",
+          "sha512": "f5f4b4e37f5a1f167e65365c0450c47be305275c44fdd7be6ce66cd86f5c79658ab54631cda884839120c05829eb729e3e3182cc3e89d625d4512d3d132d6b2b"
         },
-        "downloads": [],
-        "fileSize": null
+        "downloads": [
+          "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.0/GreenCraft.exe"
+        ],
+        "fileSize": 12651748
       },
       "overrides": {
-        "filename": "overrides-stable-0.0.0.zip",
+        "filename": "overrides-stable-0.1.0.zip",
         "hashes": {
           "sha1": "736ebe0a794732af04230116ef1b5baf82252c6c",
           "sha512": "2ea8c0c8a08fea64b2c67a31e292b71fdbb69e5e0bdfd8e0b2a489cac306e459389528e5cf796e9ef2c329b10e2a0a48826d4223262439b6624e84375a0cbf27"
         },
         "downloads": [
-          "https://github.com/samgreenalaska/green-craft/releases/download/v0.0.0/overrides-stable-0.0.0.zip"
+          "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.0/overrides-stable-0.1.0.zip"
         ],
         "fileSize": 22606
       },
@@ -196,7 +198,11 @@
             "downloads": [
               "https://cdn.modrinth.com/data/YL57xq9U/versions/oaD6KQls/iris-fabric-1.11.2%2Bmc26.2.jar"
             ],
-            "fileSize": 2820763
+            "fileSize": 2820763,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "depends on sodium; shaderpack also exceeds the Adreno 32KB limit"
           },
           {
             "path": "mods/krypton-0.3.1.jar",
@@ -271,7 +277,11 @@
             "downloads": [
               "https://cdn.modrinth.com/data/SfMw2IZN/versions/1oKhdALy/nvidium-0.4.4-beta3-26.2.jar"
             ],
-            "fileSize": 166344
+            "fileSize": 166344,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "depends on sodium; NVIDIA-only anyway"
           },
           {
             "path": "mods/scarecrowsterritory-1.1.11-fabric-mc26.2.jar",
@@ -301,7 +311,11 @@
             "downloads": [
               "https://cdn.modrinth.com/data/AANobbMI/versions/2Yom1N68/sodium-fabric-0.9.1%2Bmc26.2.jar"
             ],
-            "fileSize": 1834384
+            "fileSize": 1834384,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "crashes on world join in UniformBufferManager (OpenGLOn12)"
           },
           {
             "path": "mods/supermartijn642configlib-1.1.8-fabric-mc26.2.jar",
@@ -376,7 +390,11 @@
             "downloads": [
               "https://cdn.modrinth.com/data/fxxUqruK/versions/zZX86mbc/voxy-0.2.18-beta.jar"
             ],
-            "fileSize": 12657845
+            "fileSize": 12657845,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "crashes on world join uploading LOD geometry; also x86-64-only natives"
           },
           {
             "path": "mods/voxymap-0.7.0.jar",
@@ -391,7 +409,11 @@
             "downloads": [
               "https://github.com/samgreenalaska/voxymap/releases/download/v0.7.0/voxymap-0.7.0.jar"
             ],
-            "fileSize": 196616
+            "fileSize": 196616,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "companion to voxy"
           },
           {
             "path": "mods/xaerominimap-fabric-26.2-26.4.2.jar",
@@ -421,7 +443,11 @@
             "downloads": [
               "https://cdn.modrinth.com/data/NcUtCpym/versions/NzjI8AbM/xaeroworldmap-fabric-26.2-1.44.2.jar"
             ],
-            "fileSize": 1473719
+            "fileSize": 1473719,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "crashes after join in RegionTexture.writeToUnpackPBO"
           },
           {
             "path": "shaderpacks/photon_v1.3b.zip",
@@ -436,13 +462,17 @@
             "downloads": [
               "https://cdn.modrinth.com/data/lLqFfGNs/versions/gUv7fBPN/photon_v1.3b.zip"
             ],
-            "fileSize": 3800987
+            "fileSize": 3800987,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "shader compile exceeds the Adreno 32KB shared-memory limit"
           }
         ]
       }
     },
     "experimental": {
-      "versionId": "0.0.0",
+      "versionId": "0.1.0",
       "promotedFrom": null,
       "server": {
         "name": "GreenCraft",
@@ -453,23 +483,25 @@
       "javaArgs": "-Xmx4G",
       "minUpdaterVersion": "1.0.0",
       "launcher": {
-        "version": null,
+        "version": "0.1.0",
         "filename": "GreenCraft.exe",
         "hashes": {
-          "sha1": null,
-          "sha512": null
+          "sha1": "68e37afd14369fbac20fb85af561b663fbc613e1",
+          "sha512": "f5f4b4e37f5a1f167e65365c0450c47be305275c44fdd7be6ce66cd86f5c79658ab54631cda884839120c05829eb729e3e3182cc3e89d625d4512d3d132d6b2b"
         },
-        "downloads": [],
-        "fileSize": null
+        "downloads": [
+          "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.0/GreenCraft.exe"
+        ],
+        "fileSize": 12651748
       },
       "overrides": {
-        "filename": "overrides-experimental-0.0.0.zip",
+        "filename": "overrides-experimental-0.1.0.zip",
         "hashes": {
           "sha1": "736ebe0a794732af04230116ef1b5baf82252c6c",
           "sha512": "2ea8c0c8a08fea64b2c67a31e292b71fdbb69e5e0bdfd8e0b2a489cac306e459389528e5cf796e9ef2c329b10e2a0a48826d4223262439b6624e84375a0cbf27"
         },
         "downloads": [
-          "https://github.com/samgreenalaska/green-craft/releases/download/v0.0.0/overrides-experimental-0.0.0.zip"
+          "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.0/overrides-experimental-0.1.0.zip"
         ],
         "fileSize": 22606
       },
@@ -609,7 +641,11 @@
             "downloads": [
               "https://cdn.modrinth.com/data/YL57xq9U/versions/oaD6KQls/iris-fabric-1.11.2%2Bmc26.2.jar"
             ],
-            "fileSize": 2820763
+            "fileSize": 2820763,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "depends on sodium; shaderpack also exceeds the Adreno 32KB limit"
           },
           {
             "path": "mods/krypton-0.3.1.jar",
@@ -684,7 +720,11 @@
             "downloads": [
               "https://cdn.modrinth.com/data/SfMw2IZN/versions/1oKhdALy/nvidium-0.4.4-beta3-26.2.jar"
             ],
-            "fileSize": 166344
+            "fileSize": 166344,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "depends on sodium; NVIDIA-only anyway"
           },
           {
             "path": "mods/scarecrowsterritory-1.1.11-fabric-mc26.2.jar",
@@ -714,7 +754,11 @@
             "downloads": [
               "https://cdn.modrinth.com/data/AANobbMI/versions/2Yom1N68/sodium-fabric-0.9.1%2Bmc26.2.jar"
             ],
-            "fileSize": 1834384
+            "fileSize": 1834384,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "crashes on world join in UniformBufferManager (OpenGLOn12)"
           },
           {
             "path": "mods/supermartijn642configlib-1.1.8-fabric-mc26.2.jar",
@@ -789,7 +833,11 @@
             "downloads": [
               "https://cdn.modrinth.com/data/fxxUqruK/versions/zZX86mbc/voxy-0.2.18-beta.jar"
             ],
-            "fileSize": 12657845
+            "fileSize": 12657845,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "crashes on world join uploading LOD geometry; also x86-64-only natives"
           },
           {
             "path": "mods/voxymap-0.7.0.jar",
@@ -804,7 +852,11 @@
             "downloads": [
               "https://github.com/samgreenalaska/voxymap/releases/download/v0.7.0/voxymap-0.7.0.jar"
             ],
-            "fileSize": 196616
+            "fileSize": 196616,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "companion to voxy"
           },
           {
             "path": "mods/xaerominimap-fabric-26.2-26.4.2.jar",
@@ -834,7 +886,11 @@
             "downloads": [
               "https://cdn.modrinth.com/data/NcUtCpym/versions/NzjI8AbM/xaeroworldmap-fabric-26.2-1.44.2.jar"
             ],
-            "fileSize": 1473719
+            "fileSize": 1473719,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "crashes after join in RegionTexture.writeToUnpackPBO"
           },
           {
             "path": "shaderpacks/photon_v1.3b.zip",
@@ -849,7 +905,11 @@
             "downloads": [
               "https://cdn.modrinth.com/data/lLqFfGNs/versions/gUv7fBPN/photon_v1.3b.zip"
             ],
-            "fileSize": 3800987
+            "fileSize": 3800987,
+            "platforms": [
+              "x64"
+            ],
+            "x-excluded-reason": "shader compile exceeds the Adreno 32KB shared-memory limit"
           }
         ]
       }

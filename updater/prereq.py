@@ -31,10 +31,44 @@ def _run(cmd, timeout=900, shell=False):
 
 
 def arch():
-    m = (platform.machine() or "").upper()
-    if m in ("ARM64", "AARCH64"):
+    """The machine's NATIVE architecture: "x64" or "arm64".
+
+    Must not use platform.machine() or %PROCESSOR_ARCHITECTURE%. GreenCraft.exe is
+    built x64, so on an ARM64 machine it runs under emulation and both of those report
+    AMD64 -- we would install the x64 mod set on ARM and it would crash on world join.
+    Git Bash has the same problem, and %PROCESSOR_ARCHITEW6432% is empty there too, so
+    the usual WOW64 tell does not save you either.
+
+    IsWow64Process2's nativeMachine is the authoritative answer. Verified against
+    Win32_ComputerSystem.SystemType.
+    """
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.GetCurrentProcess.restype = wintypes.HANDLE
+        k.GetCurrentProcess.argtypes = []
+        k.IsWow64Process2.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.USHORT),
+            ctypes.POINTER(wintypes.USHORT),
+        ]
+        k.IsWow64Process2.restype = wintypes.BOOL
+        pm, nm = wintypes.USHORT(), wintypes.USHORT()
+        if k.IsWow64Process2(k.GetCurrentProcess(), ctypes.byref(pm), ctypes.byref(nm)):
+            if nm.value == 0xAA64:      # IMAGE_FILE_MACHINE_ARM64
+                return "arm64"
+            if nm.value == 0x8664:      # IMAGE_FILE_MACHINE_AMD64
+                return "x64"
+    except Exception:
+        pass
+
+    # Fallbacks, in decreasing reliability.
+    if (os.environ.get("PROCESSOR_ARCHITEW6432") or "").upper() in ("ARM64", "AARCH64"):
         return "arm64"
-    return "x64"
+    m = (platform.machine() or "").upper()
+    return "arm64" if m in ("ARM64", "AARCH64") else "x64"
 
 
 # ------------------------------------------------------------------- Tailscale
@@ -147,6 +181,35 @@ def wait_for_server(host, port, log, timeout=600):
 
 
 # ----------------------------------------------------------------------- Prism
+
+
+def seed_prism_config(log):
+    """Pre-answer Prism's Quick Setup wizard.
+
+    Without this, launching an instance drops the user into Prism's setup: a 60-entry
+    language table, then a theme picker, then accounts -- with nothing on screen saying
+    GreenCraft, right after setup promised "Minecraft will open on the title screen".
+
+    Only written when there is no config at all, so an existing Prism install keeps its
+    own settings. The account page still appears, which is correct: they do have to
+    sign in to Microsoft.
+    """
+    cfg = Path(os.environ.get("APPDATA", "")) / "PrismLauncher" / "prismlauncher.cfg"
+    if cfg.exists():
+        return False
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(
+        "[General]\n"
+        "ConfigVersion=1.3\n"
+        "Language=en_US\n"
+        "ApplicationTheme=dark\n"
+        "IconTheme=pe_colored\n"
+        "MaxMemAlloc=4096\n"
+        "MinMemAlloc=512\n",
+        encoding="utf-8",
+    )
+    log("  pre-configured Prism so its setup wizard is skipped")
+    return True
 
 
 def install_prism(spec, cached, log):
