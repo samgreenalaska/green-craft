@@ -137,24 +137,118 @@ def install_tailscale(log):
     return False
 
 
-def tailscale_up(log):
-    """Bring the node up. Opens a browser for sign-in if it is not logged in yet."""
+def tailscale_auth_url():
+    """The sign-in URL the daemon is waiting on, if any."""
+    exe = tailscale_exe()
+    if not exe:
+        return None
+    try:
+        import json
+        r = _run([exe, "status", "--json"], timeout=30)
+        d = json.loads(r.stdout or "{}")
+        return d.get("AuthURL") or None
+    except Exception:
+        return None
+
+
+def set_unattended(log):
+    """Keep Tailscale connected after the user logs out of Windows.
+
+    Done as a separate `tailscale set` after login rather than as `up --unattended`,
+    so the persistence setting is not entangled with the interactive sign-in.
+    """
+    exe = tailscale_exe()
+    try:
+        _run([exe, "set", "--unattended"], timeout=60)
+    except Exception:
+        pass
+
+
+def tailscale_up(log, timeout=600):
+    """Sign in, surfacing the auth URL and opening it.
+
+    `tailscale up` prints its auth URL to stdout and then **blocks forever** waiting
+    for the user to authenticate -- its --timeout defaults to 0s, which means no
+    limit. A previous version ran it with captured output and no timeout of its own,
+    so the URL went into a pipe nobody read, no browser ever opened, and setup sat on
+    a spinning bar indefinitely with nothing in the log. That was a install-blocking
+    bug for every first-time user.
+
+    So: start it detached with its output discarded, read the URL from
+    `status --json` instead, open it ourselves, and always print it in case the
+    browser does not appear. Kill the child on every exit path.
+    """
     exe = tailscale_exe()
     if not exe:
         return False
-    state = tailscale_status()
-    if state == "running":
+
+    if tailscale_status() == "running":
         log("  already connected")
+        set_unattended(log)
         return True
-    log("  connecting (a browser window will open for sign-in)...")
-    # --unattended keeps it connected when the user logs out of Windows; without it
-    # the machine silently drops off the tailnet.
+
+    log("  starting sign-in...")
+    proc = None
     try:
-        _run([exe, "up", "--unattended"], timeout=600)
-    except subprocess.TimeoutExpired:
-        log("  sign-in timed out")
+        proc = subprocess.Popen(
+            [exe, "up", "--timeout", f"{int(timeout)}s"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=CREATE_NO_WINDOW,
+        )
+
+        # The daemon publishes AuthURL shortly after `up` starts.
+        url = None
+        for _ in range(30):
+            if tailscale_status() == "running":
+                break
+            url = tailscale_auth_url()
+            if url:
+                break
+            time.sleep(1)
+
+        if url:
+            log("")
+            log("  Sign in to Tailscale in your browser:")
+            log(f"  {url}")
+            log("")
+            try:
+                webbrowser.open(url)
+            except Exception:
+                log("  (could not open a browser automatically - copy the link above)")
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if tailscale_status() == "running":
+                log("  connected")
+                set_unattended(log)
+                return True
+            if proc.poll() is not None and tailscale_status() != "running":
+                # `up` exited without reaching Running -- give the daemon a moment,
+                # then believe it.
+                time.sleep(3)
+                if tailscale_status() == "running":
+                    log("  connected")
+                    set_unattended(log)
+                    return True
+                break
+            time.sleep(2)
+
+        log("  sign-in did not complete")
+        if url:
+            log(f"  Finish signing in at {url} and run GreenCraft again.")
         return False
-    return tailscale_status() == "running"
+    finally:
+        # Never leave a blocked `tailscale up` behind. Earlier builds leaked one per
+        # attempt, outliving the installer that spawned them.
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=10)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
 
 
 def open_invite(url, log):

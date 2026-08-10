@@ -158,6 +158,33 @@ class SetupWindow:
         self.done_btn = ttk.Button(self.btnrow, text="Close", style="Accent.TButton",
                                    command=self.root.destroy, state="disabled")
         self.done_btn.pack(side="right")
+        # Appears only if a sign-in link is logged. Sitting on a spinning bar with no
+        # way to reach or copy the URL is what made the Tailscale hang unrecoverable.
+        self._link = None
+        self.link_btn = ttk.Button(self.btnrow, text="Copy sign-in link",
+                                   command=self._copy_link)
+        self.open_btn = ttk.Button(self.btnrow, text="Open sign-in page",
+                                   command=self._open_link)
+
+    def _copy_link(self):
+        if self._link:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(self._link)
+            self.link_btn.configure(text="Copied")
+
+    def _open_link(self):
+        if self._link:
+            import webbrowser
+            webbrowser.open(self._link)
+
+    def _note_link(self, text):
+        """Surface a sign-in URL as buttons the moment it is logged."""
+        t = text.strip()
+        if self._link or not t.startswith("https://"):
+            return
+        self._link = t
+        self.link_btn.pack(side="left")
+        self.open_btn.pack(side="left", padx=(8, 0))
 
     def _append(self, text):
         self.box.configure(state="normal")
@@ -193,6 +220,7 @@ class SetupWindow:
                 kind, payload = self.q.get_nowait()
                 if kind == "log":
                     self._append(payload)
+                    self._note_link(payload)
                     if payload.strip():
                         self.status.configure(text=payload.strip()[:70])
                 elif kind == "done":
@@ -315,6 +343,7 @@ class SetupWindow:
                 kind, payload = self.q.get_nowait()
                 if kind == "log":
                     self._append(payload)
+                    self._note_link(payload)
                     if payload.strip():
                         self.status.configure(text=payload.strip()[:70])
                 else:

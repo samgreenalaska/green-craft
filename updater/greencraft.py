@@ -651,8 +651,18 @@ def run_setup_gui():
     import install as inst
 
     state = inst.load_state()
+
+    def _work(opts, window_log):
+        # Tee to the log file. Without this the setup wizard wrote nothing at all
+        # while it ran, so a user stuck partway had no log to send and support had
+        # nothing to look at -- exactly the situation the Tailscale hang created.
+        def tee(msg=""):
+            window_log(msg)
+            log(msg)
+        return do_install(opts, tee)
+
     win = gui.SetupWindow(
-        lambda opts, log: do_install(opts, log),
+        _work,
         uninstall_work=lambda opts, log: inst.uninstall_selected(opts, log),
         world_count=inst.world_count(state),
         installed=inst.is_installed(),
