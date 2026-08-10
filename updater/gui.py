@@ -95,7 +95,19 @@ class SetupWindow:
             ttk.Button(row, text="Uninstall...",
                        command=self._open_uninstall).pack(side="left")
 
-        ttk.Label(f, text="GreenCraft", style="Title.TLabel").pack(anchor="w")
+        try:
+            import version as _v
+            ver = _v.VERSION
+        except Exception:
+            ver = "?"
+        head = ttk.Frame(f)
+        head.pack(fill="x")
+        ttk.Label(head, text="GreenCraft", style="Title.TLabel").pack(side="left", anchor="w")
+        # Version on screen, not just in the log -- a bug report that says "0.1.0" is
+        # worth far more than one that says "the latest one, I think".
+        ttk.Label(head, text=f"v{ver}", style="Muted.TLabel").pack(side="left",
+                                                                   anchor="s", padx=(8, 0),
+                                                                   pady=(0, 4))
         ttk.Label(f, text="Modded Minecraft, set up for you.",
                   style="Muted.TLabel").pack(anchor="w", pady=(2, 16))
 

@@ -12,16 +12,30 @@ import sys
 import winreg
 from pathlib import Path
 
+import version as _version
+
 APP_NAME = "GreenCraft"
-APP_VERSION = "0.0.0"
+APP_VERSION = _version.VERSION
 PUBLISHER = "crazysam"
 UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\GreenCraft"
 
 LOCALAPPDATA = Path(os.environ.get("LOCALAPPDATA", ""))
 APPDATA = Path(os.environ.get("APPDATA", ""))
+
+# Everything GreenCraft owns lives under one folder, so "where is it installed" and
+# "what do I delete" have one answer.
+#   GreenCraft.exe                  the launcher (moved here from wherever it was run)
+#   GreenCraft.lnk                  play, stable
+#   GreenCraft Experimental.lnk     play, experimental
+#   Uninstall GreenCraft.lnk        obvious way out without hunting through Settings
+#   logs\greencraft.log             rotated, see rotate_logs()
+#   cache\                          content-addressed downloads
+#   install.json                    what we installed and where
 INSTALL_DIR = LOCALAPPDATA / "GreenCraft"
 STATE_FILE = INSTALL_DIR / "install.json"
 CACHE_DIR = INSTALL_DIR / "cache"
+LOG_DIR = INSTALL_DIR / "logs"
+INSTALLED_EXE = INSTALL_DIR / "GreenCraft.exe"
 
 CREATE_NO_WINDOW = 0x08000000
 
@@ -103,10 +117,55 @@ def shortcut_targets(experimental):
     return out
 
 
+def relocate_self(current_exe, log=print):
+    """Copy the launcher into the install folder and return the installed path.
+
+    People run the download from wherever it landed -- Downloads, a USB stick, a
+    network share. Shortcuts pointing there break the moment that file is tidied away,
+    and a shortcut into someone's Downloads folder is not a real installation.
+    """
+    INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+    current_exe = Path(current_exe)
+    if current_exe.suffix.lower() != ".exe":
+        return current_exe          # running from source; leave it alone
+    try:
+        if current_exe.resolve() == INSTALLED_EXE.resolve():
+            return INSTALLED_EXE
+    except OSError:
+        pass
+    try:
+        shutil.copy2(current_exe, INSTALLED_EXE)
+        log(f"  installed to {INSTALL_DIR}")
+        return INSTALLED_EXE
+    except OSError as e:
+        log(f"  could not copy to {INSTALL_DIR} ({e}); using {current_exe}")
+        return current_exe
+
+
 def create_shortcuts(exe, experimental, on_desktop=True, in_start_menu=True, icon=None):
+    """Both channels always get a shortcut in the program folder; only the channel the
+    user chose goes on the Desktop and Start Menu.
+
+    That way experimental is discoverable if they ever need it, without cluttering the
+    desktop of someone who was told to leave it switched off.
+    """
     made = []
-    for fname, channel in shortcut_targets(experimental):
-        desc = f"{APP_NAME} - {'experimental test' if channel == 'experimental' else 'play'} channel"
+    INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+
+    for fname, channel in shortcut_targets(True):        # both, in the program folder
+        desc = (f"{APP_NAME} - "
+                f"{'experimental test channel' if channel == 'experimental' else 'play'}")
+        p = INSTALL_DIR / fname
+        if make_shortcut(p, exe, f"--channel {channel}", desc, icon):
+            made.append(str(p))
+
+    p = INSTALL_DIR / "Uninstall GreenCraft.lnk"
+    if make_shortcut(p, exe, "--uninstall", "Remove GreenCraft", icon):
+        made.append(str(p))
+
+    for fname, channel in shortcut_targets(experimental):   # chosen channel only
+        desc = (f"{APP_NAME} - "
+                f"{'experimental test channel' if channel == 'experimental' else 'play'}")
         for folder, want in ((desktop(), on_desktop), (start_menu(), in_start_menu)):
             if not want:
                 continue
@@ -119,8 +178,9 @@ def create_shortcuts(exe, experimental, on_desktop=True, in_start_menu=True, ico
 
 def remove_shortcuts():
     removed = []
-    for folder in (desktop(), start_menu()):
+    for folder in (desktop(), start_menu(), INSTALL_DIR):
         for fname in ("GreenCraft.lnk", "GreenCraft Experimental.lnk",
+                      "Uninstall GreenCraft.lnk",
                       "GreenCraft (Experimental).lnk"):  # legacy name
             p = folder / fname
             if p.exists():
@@ -130,6 +190,37 @@ def remove_shortcuts():
                 except OSError:
                     pass
     return removed
+
+
+# --------------------------------------------------------------------- log rotation
+
+LOG_MAX_BYTES = 1 * 1024 * 1024      # rotate at 1 MB
+LOG_KEEP = 3                          # greencraft.log + .1 + .2 + .3  ->  ~4 MB ceiling
+
+
+def rotate_logs(path=None):
+    """Size-based rotation with a fixed number of generations.
+
+    Bounded by construction: a hard ceiling of ~4 MB no matter how long the machine
+    lives or how often the launcher runs. Age-based pruning was the alternative, but
+    someone who plays daily for a year and someone who plays twice both end up with a
+    sensible file this way, and there is no clock to get wrong.
+    """
+    path = Path(path or (LOG_DIR / "greencraft.log"))
+    try:
+        if not path.exists() or path.stat().st_size < LOG_MAX_BYTES:
+            return False
+        oldest = path.with_suffix(f".{LOG_KEEP}.log")
+        if oldest.exists():
+            oldest.unlink()
+        for i in range(LOG_KEEP - 1, 0, -1):
+            src = path.with_suffix(f".{i}.log")
+            if src.exists():
+                os.replace(src, path.with_suffix(f".{i + 1}.log"))
+        os.replace(path, path.with_suffix(".1.log"))
+        return True
+    except OSError:
+        return False
 
 
 # ------------------------------------------------------- Apps & Features listing

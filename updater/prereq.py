@@ -216,23 +216,41 @@ def tailscale_up(log, timeout=600):
             except Exception:
                 log("  (could not open a browser automatically - copy the link above)")
 
+        # Wait for the human, not for the process.
+        #
+        # `tailscale up` can return as soon as it has handed the daemon the login
+        # request, while the browser sign-in is still in progress. An earlier build
+        # treated that exit as failure and told the user "sign-in did not complete"
+        # while they were mid-MFA -- the thing it was waiting for was still happening.
+        #
+        # The real signal is the daemon: as long as it still advertises an AuthURL,
+        # the link is live and the user is presumed to be working through it. Real
+        # first-time SSO means switching apps, a password manager, and very often an
+        # MFA prompt on a phone; a minute can go on the MFA step alone.
         deadline = time.time() + timeout
+        waited = 0
         while time.time() < deadline:
             if tailscale_status() == "running":
                 log("  connected")
                 set_unattended(log)
                 return True
-            if proc.poll() is not None and tailscale_status() != "running":
-                # `up` exited without reaching Running -- give the daemon a moment,
-                # then believe it.
+            still_pending = tailscale_auth_url() is not None
+            if not still_pending and proc.poll() is not None:
                 time.sleep(3)
                 if tailscale_status() == "running":
                     log("  connected")
                     set_unattended(log)
                     return True
+                log("  sign-in was cancelled or the link expired")
                 break
             time.sleep(2)
+            waited += 2
+            if waited % 30 == 0:
+                log(f"  still waiting for you to finish signing in... ({waited // 60}m"
+                    f"{waited % 60:02d}s)")
 
+        if tailscale_status() == "running":
+            return True
         log("  sign-in did not complete")
         if url:
             log(f"  Finish signing in at {url} and run GreenCraft again.")

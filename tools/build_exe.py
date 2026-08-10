@@ -1,4 +1,4 @@
-"""Package the updater as a single self-contained GreenCraft.exe.
+﻿"""Package the updater as a single self-contained GreenCraft.exe.
 
 PyInstaller bundles the Python interpreter, so friends install nothing -- the exe is
 the whole runtime. Output lands in dist/ alongside the overrides bundles, ready to be
@@ -46,6 +46,8 @@ def main():
         "--hidden-import", "gui",
         "--hidden-import", "install",
         "--hidden-import", "prereq",
+        "--hidden-import", "selfupdate",
+        "--hidden-import", "version",
         # Needed at runtime for the window icon; --icon only sets the exe's own icon.
         "--add-data", f"{UPDATER / 'icon.ico'};.",
         "--noconfirm",
@@ -68,3 +70,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

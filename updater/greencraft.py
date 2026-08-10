@@ -46,6 +46,7 @@ ALLOWED_HOSTS = {
 
 LOG_FILE = LOCALAPPDATA / "GreenCraft" / "logs" / "greencraft.log"
 _log_fh = None
+_log_rotated = False
 
 
 def log(msg=""):
@@ -63,11 +64,17 @@ def log(msg=""):
         except Exception:
             pass
     try:
+        global _log_rotated
         if _log_fh is None:
             LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            if not _log_rotated:
+                _log_rotated = True
+                import install as _inst
+                _inst.rotate_logs(LOG_FILE)
             _log_fh = open(LOG_FILE, "a", encoding="utf-8")
+            import version as _v
             _log_fh.write(f"\n--- {datetime.now().isoformat(timespec='seconds')} "
-                          f"{' '.join(sys.argv[1:]) or '(no args)'} ---\n")
+                          f"v{_v.VERSION} {' '.join(sys.argv[1:]) or '(no args)'} ---\n")
         _log_fh.write(msg + "\n")
         _log_fh.flush()
     except Exception:
@@ -494,15 +501,33 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
     if not prereq.tailscale_up(log):
         raise RuntimeError("Tailscale sign-in did not complete. Run GreenCraft again to retry.")
 
-    # The share has to be accepted before the server is reachable. Being signed in to
-    # your own tailnet is not enough.
-    prereq.open_invite(opts.get("invite"), log)
+    # Being signed in to Tailscale and having access to wheatley are different things.
+    # A friend who runs setup before clicking their invite link is signed in fine and
+    # will never reach the server -- so this wait is bounded, and failing here says
+    # "accept the invite", not "sign-in failed". Conflating the two sends people to
+    # re-do the one part that already worked.
+    invite = opts.get("invite")
+    prereq.open_invite(invite, log)
     srv = m["channels"]["stable"]["server"]
-    if not prereq.wait_for_server(srv["address"], int(srv["port"]), log, timeout=600):
-        raise RuntimeError(
-            f"Could not reach {srv['address']}. Make sure you opened the invite link "
-            "and accepted the shared machine, then run GreenCraft again."
-        )
+    if not prereq.wait_for_server(srv["address"], int(srv["port"]), log, timeout=90):
+        if invite:
+            log("  still no access - reopening your invite link...")
+            prereq.open_invite(invite, log)
+            if prereq.wait_for_server(srv["address"], int(srv["port"]), log, timeout=120):
+                log("  reachable")
+            else:
+                raise RuntimeError(
+                    "You are signed in to Tailscale, but this account cannot reach the "
+                    "GreenCraft server yet. Accept the shared machine using the invite "
+                    "link that just opened, then run GreenCraft again."
+                )
+        else:
+            raise RuntimeError(
+                "You are signed in to Tailscale, but this account cannot reach the "
+                "GreenCraft server. You probably have not accepted the invite yet - "
+                "open the invite link you were sent, accept the shared machine, then "
+                "run GreenCraft again."
+            )
 
     log()
     log("Setting up Prism Launcher...")
@@ -544,16 +569,20 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
         log(f"  added '{ch['server']['name']}' to the server list")
 
     log()
+    log("Installing GreenCraft...")
+    exe_here = inst.relocate_self(inst.exe_path(), log)
+
     log("Creating shortcuts...")
     # icon=None means Windows uses the target's own icon, which is GreenCraft's -- it
     # is embedded in the exe at build time, so there is no separate file to ship.
     made = inst.create_shortcuts(
-        inst.exe_path(), opts.get("experimental", False),
+        exe_here, opts.get("experimental", False),
         on_desktop=opts.get("desktop", True),
         in_start_menu=opts.get("start_menu", True),
     )
     for p in made:
-        log(f"  {Path(p).name}")
+        where = "program folder" if str(inst.INSTALL_DIR) in p else "desktop / start menu"
+        log(f"  {Path(p).name}  ({where})")
 
     log("Registering with Apps & Features...")
     size_kb = 0
@@ -561,7 +590,7 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
         d = PRISM_INSTANCES / i
         if d.is_dir():
             size_kb += sum(f.stat().st_size for f in d.rglob("*") if f.is_file()) // 1024
-    inst.register_uninstall(inst.exe_path(), inst.INSTALL_DIR, size_kb)
+    inst.register_uninstall(exe_here, inst.INSTALL_DIR, size_kb)
 
     inst.save_state({
         "installed": True,
@@ -722,6 +751,22 @@ def main():
     args = ap.parse_args()
 
     import install as inst
+    import selfupdate
+    import version as _v
+
+    # Tidy up the previous build left behind by an update, before anything else.
+    selfupdate.cleanup_old(log)
+
+    # Self-update on the routine path, before syncing. Not during setup or uninstall:
+    # swapping the exe out from under a wizard mid-run is asking for trouble, and a
+    # user trying to remove GreenCraft should not have a new copy installed first.
+    if args.channel and not (args.setup or args.install or args.uninstall or args.dry_run):
+        try:
+            m = load_manifest(args.manifest)
+            if selfupdate.check_and_apply(m, args.channel, cached, log, sys.argv[1:]):
+                return 0
+        except Exception as e:
+            log(f"update check skipped ({type(e).__name__}: {e})")
 
     if args.uninstall:
         if args.quiet or args.components:

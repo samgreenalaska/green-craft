@@ -26,6 +26,20 @@ def main():
         return 2
     version = sys.argv[1]
 
+    # Stamp the source FIRST, then require a rebuild, so the exe's own VERSION and the
+    # manifest's launcher.version can never disagree. If they do, self-update either
+    # never fires or fires in a loop.
+    vf = REPO / "updater" / "version.py"
+    text = vf.read_text(encoding="utf-8")
+    new = re.sub(r'^VERSION = ".*"$', f'VERSION = "{version}"', text, flags=re.M)
+    if new != text:
+        vf.write_text(new, encoding="utf-8")
+        print(f"stamped updater/version.py -> {version}")
+        print("\nversion.py changed - rebuild and re-run:")
+        print("    python tools/build_exe.py")
+        print(f"    python tools/set_version.py {version}")
+        return 1
+
     exe = REPO / "dist" / "GreenCraft.exe"
     if not exe.exists():
         print("dist/GreenCraft.exe missing - run tools/build_exe.py first")
