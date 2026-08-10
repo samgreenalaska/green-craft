@@ -1,5 +1,32 @@
 {
   "schemaVersion": 1,
+  "manifestUrl": "https://raw.githubusercontent.com/samgreenalaska/green-craft/main/manifest.json",
+  "prerequisites": {
+    "prism": {
+      "version": "11.0.3",
+      "x64": {
+        "filename": "PrismLauncher-Windows-MSVC-Setup-11.0.3.exe",
+        "downloads": [
+          "https://github.com/PrismLauncher/PrismLauncher/releases/download/11.0.3/PrismLauncher-Windows-MSVC-Setup-11.0.3.exe"
+        ],
+        "fileSize": 23956896,
+        "sha512": "ed79f9057113468d44d7f346c0611c98a5abaffe0b4ad49c21decbb64703bac12a1c7fdef4430415dcb082bcaa94360f7dc58b2616b2853569f3e65d401b5f1f"
+      },
+      "arm64": {
+        "filename": "PrismLauncher-Windows-MSVC-arm64-Setup-11.0.3.exe",
+        "downloads": [
+          "https://github.com/PrismLauncher/PrismLauncher/releases/download/11.0.3/PrismLauncher-Windows-MSVC-arm64-Setup-11.0.3.exe"
+        ],
+        "fileSize": 22079512,
+        "sha512": "7e8f9263b077ab10cb93db789f16b55c4bd10dec18d2ad1a628b72e571c68cb1db4b5fd4e9b80d10a16314116b91196c6b5d4a2bb2e77619a6c54e083e27d11f"
+      }
+    },
+    "tailscale": {
+      "method": "winget",
+      "wingetId": "tailscale.tailscale",
+      "fallbackUrl": "https://tailscale.com/download"
+    }
+  },
   "channels": {
     "stable": {
       "versionId": "0.0.0",
@@ -827,6 +854,5 @@
         ]
       }
     }
-  },
-  "manifestUrl": "https://raw.githubusercontent.com/samgreenalaska/green-craft/main/manifest.json"
+  }
 }
