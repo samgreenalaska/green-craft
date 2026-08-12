@@ -19,3 +19,8 @@
 
 # PLAN.md is working notes, not a published artifact.
 /PLAN.md
+
+# build/runtime junk
+__pycache__/
+*.pyc
+greencraft.marker
