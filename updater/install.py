@@ -101,8 +101,8 @@ def make_shortcut(path, target, args, description, icon=None, workdir=None):
     import procenv
     subprocess.run(
         ["powershell", "-NoProfile", "-NonInteractive", "-Command", "; ".join(ps)],
-        capture_output=True, creationflags=CREATE_NO_WINDOW, check=False,
-        env=procenv.child_env(),
+        capture_output=True, check=False,
+        env=procenv.child_env(), **procenv.hidden(),
     )
     return path.exists()
 
@@ -407,7 +407,7 @@ def uninstall_program(pattern, log=print, quiet=True):
     try:
         import procenv
         r = subprocess.run(cmd, shell=True, capture_output=True, text=True,
-                           timeout=600, env=procenv.child_env())
+                           timeout=600, env=procenv.child_env(), **procenv.hidden())
         if r.returncode == 0:
             log(f"    removed")
             return True

@@ -27,8 +27,7 @@ def _run(cmd, timeout=900, shell=False):
     import procenv
     return subprocess.run(
         cmd, shell=shell, capture_output=True, text=True,
-        timeout=timeout, creationflags=CREATE_NO_WINDOW,
-        env=procenv.child_env(),
+        timeout=timeout, env=procenv.child_env(), **procenv.hidden(),
     )
 
 
@@ -196,7 +195,7 @@ def tailscale_up(log, timeout=600):
         proc = subprocess.Popen(
             [exe, "up", "--timeout", f"{int(timeout)}s"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            creationflags=CREATE_NO_WINDOW, env=procenv.child_env(),
+            env=procenv.child_env(), **procenv.hidden(),
         )
 
         # The daemon publishes AuthURL shortly after `up` starts.

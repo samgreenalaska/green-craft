@@ -6,7 +6,7 @@ manifest's launcher.version, so if it is wrong the launcher either never updates
 updates in a loop.
 """
 
-VERSION = "0.1.8"
+VERSION = "0.1.9"
 
 
 def parse(v):

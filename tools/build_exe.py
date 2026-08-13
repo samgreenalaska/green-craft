@@ -69,7 +69,10 @@ def build_app():
         "--hidden-import", "selfupdate",
         "--hidden-import", "version",
         "--hidden-import", "procenv",
+        # Both channel icons ship beside the exe: greencraft.py copies the right one
+        # into Prism's icons directory and points the instance's iconKey at it.
         "--add-data", f"{UPDATER / 'icon.ico'};.",
+        "--add-data", f"{UPDATER / 'icon-experimental.ico'};.",
         "--noconfirm",
         "--icon", str(UPDATER / "icon.ico"),
         "--distpath", str(DIST),

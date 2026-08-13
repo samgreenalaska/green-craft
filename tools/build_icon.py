@@ -1,6 +1,9 @@
-"""Generate updater/icon.ico from updater/icon-64.png.
+"""Generate the channel icons from their 64x64 masters.
 
     python tools/build_icon.py
+
+Writes icon.ico from icon-64.png (the cat, stable) and icon-experimental.ico from
+icon-experimental-64.png (the dog, experimental).
 
 The master is 64x64 pixel art and every entry is scaled from it with NEAREST, so no
 edge is ever smoothed. That is the whole point: the icon this replaced had been scaled
@@ -33,8 +36,16 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-MASTER = REPO / "updater" / "icon-64.png"
-OUT = REPO / "updater" / "icon.ico"
+
+# One icon per channel, so the two Prism instances are told apart at a glance in the
+# launcher: a cat for stable, a dog for experimental. tools/build_icon.py writes both;
+# greencraft.py copies the right one into Prism's icons directory and points the
+# instance's iconKey at it.
+MASTERS = [
+    (REPO / "updater" / "icon-64.png", REPO / "updater" / "icon.ico"),
+    (REPO / "updater" / "icon-experimental-64.png",
+     REPO / "updater" / "icon-experimental.ico"),
+]
 
 SIZES = [16, 32, 64]
 
@@ -46,14 +57,10 @@ def main():
         print("Pillow is not installed. Run:  python -m pip install pillow")
         return 1
 
-    if not MASTER.exists():
-        print(f"missing master: {MASTER}")
-        return 1
-
-    art = Image.open(MASTER).convert("RGBA")
-    if art.size != (64, 64):
-        print(f"master must be 64x64, got {art.size[0]}x{art.size[1]}")
-        return 1
+    for master, _out in MASTERS:
+        if not master.exists():
+            print(f"missing master: {master}")
+            return 1
 
     def dib(im):
         """An icon's BMP entry: BITMAPINFOHEADER, then bottom-up BGRA, then an AND mask.
@@ -73,29 +80,32 @@ def main():
                 row += bytes((b, g, r, a))
             rows.append(bytes(row))
         mask_stride = ((n + 31) // 32) * 4
-        return header + b"".join(rows) + b"\0" * (mask_stride * n)
+        return header + b"".join(rows) + bytes(mask_stride * n)
 
-    blobs = []
-    for sz in SIZES:
-        im = art if sz == 64 else art.resize((sz, sz), Image.NEAREST)
-        blobs.append((sz, dib(im)))
+    for master, out in MASTERS:
+        art = Image.open(master).convert("RGBA")
+        if art.size != (64, 64):
+            print(f"{master.name} must be 64x64, got {art.size[0]}x{art.size[1]}")
+            return 1
 
-    # ICONDIR, then one ICONDIRENTRY per image, then the image data.
-    offset = 6 + 16 * len(blobs)
-    out = bytearray(struct.pack("<HHH", 0, 1, len(blobs)))
-    for sz, blob in blobs:
-        out += struct.pack("<BBBBHHII", sz, sz, 0, 0, 1, 32, len(blob), offset)
-        offset += len(blob)
-    for _, blob in blobs:
-        out += blob
+        blobs = []
+        for sz in SIZES:
+            im = art if sz == 64 else art.resize((sz, sz), Image.NEAREST)
+            blobs.append((sz, dib(im)))
 
-    before = OUT.stat().st_size if OUT.exists() else 0
-    OUT.write_bytes(out)
+        offset = 6 + 16 * len(blobs)
+        data = bytearray(struct.pack("<HHH", 0, 1, len(blobs)))
+        for sz, blob in blobs:
+            data += struct.pack("<BBBBHHII", sz, sz, 0, 0, 1, 32, len(blob), offset)
+            offset += len(blob)
+        for _, blob in blobs:
+            data += blob
 
-    print(f"{OUT.name}: {len(blobs)} sizes, {len(out):,} bytes"
-          + (f" (was {before:,})" if before else ""))
-    for sz, blob in blobs:
-        print(f"  {sz:>3}x{sz:<3} {len(blob):>7,}")
+        before = out.stat().st_size if out.exists() else 0
+        out.write_bytes(data)
+        print(f"{out.name}: {len(blobs)} sizes, {len(data):,} bytes"
+              + (f" (was {before:,})" if before else "")
+              + f"   <- {master.name}")
     return 0
 
 

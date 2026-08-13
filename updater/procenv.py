@@ -20,7 +20,28 @@ PyInstaller bookkeeping variables while we are at it so children do not inherit 
 confused idea of where they were launched from.
 """
 import os
+import subprocess
 import sys
+
+CREATE_NO_WINDOW = 0x08000000
+
+
+def hidden():
+    """Keyword arguments that stop a console child flashing a window on screen.
+
+    CREATE_NO_WINDOW on its own is not enough on Windows 11. When Windows Terminal is
+    the default console host, the console handoff can still paint a window for a few
+    frames, which is exactly the black flash a friend sees during setup and reads as
+    something sketchy. Passing a hidden STARTUPINFO as well closes that gap.
+
+    Spread into any subprocess call that runs a console program:
+
+        subprocess.run(cmd, **procenv.hidden(), env=procenv.child_env())
+    """
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    si.wShowWindow = subprocess.SW_HIDE
+    return {"creationflags": CREATE_NO_WINDOW, "startupinfo": si}
 
 
 def bundle_dir():

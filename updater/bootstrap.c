@@ -340,6 +340,12 @@ static int run_wait(wchar_t *cmdline, const wchar_t *cwd) {
 
     ZeroMemory(&si, sizeof(si));
     si.cb = sizeof(si);
+    /* CREATE_NO_WINDOW alone is not enough on Windows 11. With Windows Terminal as the
+     * default console host, the handoff can still paint a window for a few frames, and
+     * a black box flashing during setup is exactly what makes an installer look
+     * sketchy. Ask for a hidden window too. */
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
     ZeroMemory(&pi, sizeof(pi));
 
     if (!CreateProcessW(NULL, cmdline, NULL, NULL, FALSE,

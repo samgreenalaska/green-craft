@@ -227,6 +227,53 @@ def split_java_args(java_args):
     return lo, hi, " ".join(rest)
 
 
+def ensure_instance_icon(inst_root, channel):
+    """Give the Prism instance its own icon: a cat for stable, a dog for experimental.
+
+    Prism keeps icons in <prism data>/icons and refers to one by `iconKey`, which is the
+    file's name without its extension. Doing this by hand means every friend gets the
+    default grass block and cannot tell the two instances apart in the launcher.
+
+    Runs on every sync, not just at creation, so an existing instance picks the icon up
+    and a changed icon file replaces the stale copy. Failure here is cosmetic, so it is
+    logged and swallowed rather than allowed to stop a launch.
+    """
+    key = f"greencraft-{channel}"
+    try:
+        here = (Path(sys.executable).parent if getattr(sys, "frozen", False)
+                else Path(__file__).resolve().parent)
+        source = here / ("icon-experimental.ico" if channel == "experimental" else "icon.ico")
+        if not source.is_file():
+            return
+
+        icons = inst_root.parent.parent / "icons"      # instances/<id> -> <prism data>
+        icons.mkdir(parents=True, exist_ok=True)
+        dest = icons / f"{key}.ico"
+        want = source.read_bytes()
+        if not dest.exists() or dest.read_bytes() != want:
+            dest.write_bytes(want)
+            log(f"  instance icon: {dest.name}")
+
+        cfg = inst_root / "instance.cfg"
+        if not cfg.exists():
+            return
+        lines = cfg.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            if line.startswith("iconKey="):
+                if line == f"iconKey={key}":
+                    return
+                lines[i] = f"iconKey={key}"
+                break
+        else:
+            # No iconKey at all: it belongs in [General], not appended past the end.
+            at = 1 if lines and lines[0].startswith("[") else 0
+            lines.insert(at, f"iconKey={key}")
+        cfg.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        log(f"  instance.cfg: iconKey={key}")
+    except Exception as e:
+        log(f"  could not set the instance icon: {e}")
+
+
 def ensure_instance(inst_root, channel_name, deps, java_args):
     """Create the Prism instance skeleton if it isn't there. Never overwrites an
     existing instance.cfg -- that file holds the user's own memory/Java settings."""
@@ -262,7 +309,7 @@ def ensure_instance(inst_root, channel_name, deps, java_args):
             "ConfigVersion=1.3",
             "InstanceType=OneSix",
             f"name={channel_name}",
-            "iconKey=default",
+            f"iconKey=greencraft-{channel_name.replace('greencraft-', '')}",
             "OverrideCommands=false",
             "JoinServerOnLaunch=false",
         ]
@@ -556,6 +603,7 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
         log()
         log(f"Setting up the {name} channel...")
         ensure_instance(root, inst_id, ch["pack"]["dependencies"], ch.get("javaArgs"))
+        ensure_instance_icon(root, name)
         added, updated, kept, skipped, removed = sync(ch, mcdir, False)
         log(f"  {len(added) + len(updated)} files installed, {len(kept)} already present")
         lock = load_lock(mcdir)
@@ -640,6 +688,7 @@ def _sync_and_prepare(args, log):
     log(f"Channel {args.channel}, version {ch['versionId']}")
     ensure_instance(root / inst_id, ch["prismInstanceId"],
                     ch["pack"]["dependencies"], ch.get("javaArgs"))
+    ensure_instance_icon(root / inst_id, args.channel)
 
     log("Checking mods...")
     added, updated, kept, skipped, removed = sync(ch, mcdir, False)
@@ -867,6 +916,7 @@ def main():
         created = ensure_instance(
             inst_root, ch["prismInstanceId"], ch["pack"]["dependencies"], ch.get("javaArgs")
         )
+        ensure_instance_icon(inst_root, args.channel)
         log(f"Instance skeleton: {'created' if created else 'already present'}")
 
     log("Syncing content...")
