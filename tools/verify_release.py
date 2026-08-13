@@ -90,6 +90,30 @@ for ch, c in m.get("channels", {}).items():
             else:
                 print(f"ok    {ch}: launcher.{part} matches dist/{spec['filename']}")
 
+# 5b. bootstrap.txt agrees with the stable launcher payload. GreenCraftSetup.exe reads
+#     this file and nothing else, so if it drifts from the manifest every new friend
+#     installs the wrong version -- or a version whose hash check fails.
+BOOTSTRAP = os.path.join(REPO, "bootstrap.txt")
+stable = m.get("channels", {}).get("stable", {})
+spec = (stable.get("launcher") or {}).get("payload") or {}
+if not os.path.exists(BOOTSTRAP):
+    errors.append("bootstrap.txt is missing -- run tools/set_version.py")
+elif spec:
+    cfg = {}
+    for line in open(BOOTSTRAP, encoding="utf-8"):
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, _, v = line.partition("=")
+            cfg[k.strip()] = v.strip()
+    if cfg.get("sha512") != spec["hashes"]["sha512"]:
+        errors.append("bootstrap.txt sha512 does not match launcher.payload")
+    elif cfg.get("url") != spec["downloads"][0]:
+        errors.append("bootstrap.txt url does not match launcher.payload")
+    elif cfg.get("version") != stable.get("versionId"):
+        errors.append("bootstrap.txt version does not match stable versionId")
+    else:
+        print("ok    bootstrap.txt matches launcher.payload")
+
 # 6. every pack file has a hash and a download
 for ch, c in m.get("channels", {}).items():
     for f in c.get("pack", {}).get("files", []):
