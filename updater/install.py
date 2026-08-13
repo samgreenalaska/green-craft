@@ -197,25 +197,58 @@ def delete_source_later(src, log=print):
         return False
 
 
+def channel_icon(channel):
+    """Path to the icon a shortcut for `channel` should use, or None.
+
+    A .lnk stores a path to an icon file, so the icon has to live somewhere permanent:
+    the bundled copy is inside the app folder, which is replaced wholesale on every
+    update, and pointing shortcuts into a directory that gets swapped would leave them
+    showing a blank page. Copy it into the program folder instead, which survives.
+
+    Without this, both shortcuts fall back to the exe's own embedded icon, which is the
+    stable cat, so the experimental shortcut is indistinguishable from the stable one.
+    """
+    import procenv
+    name = "icon-experimental.ico" if channel == "experimental" else "icon.ico"
+    src = procenv.asset(name)
+    if not src:
+        return None
+    try:
+        INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+        dest = INSTALL_DIR / name
+        data = Path(src).read_bytes()
+        if not dest.exists() or dest.read_bytes() != data:
+            dest.write_bytes(data)
+        return str(dest)
+    except OSError:
+        return None
+
+
 def create_shortcuts(exe, experimental, on_desktop=True, in_start_menu=True, icon=None):
     """Both channels always get a shortcut in the program folder; only the channel the
     user chose goes on the Desktop and Start Menu.
 
     That way experimental is discoverable if they ever need it, without cluttering the
     desktop of someone who was told to leave it switched off.
+
+    `icon` overrides the per-channel icons, and is only for callers that want one icon
+    everywhere; leave it None so each channel gets its own.
     """
     made = []
     INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+
+    def icon_for(channel):
+        return icon or channel_icon(channel)
 
     for fname, channel in shortcut_targets(True):        # both, in the program folder
         desc = (f"{APP_NAME} - "
                 f"{'experimental test channel' if channel == 'experimental' else 'play'}")
         p = INSTALL_DIR / fname
-        if make_shortcut(p, exe, f"--channel {channel}", desc, icon):
+        if make_shortcut(p, exe, f"--channel {channel}", desc, icon_for(channel)):
             made.append(str(p))
 
     p = INSTALL_DIR / "Uninstall GreenCraft.lnk"
-    if make_shortcut(p, exe, "--uninstall", "Remove GreenCraft", icon):
+    if make_shortcut(p, exe, "--uninstall", "Remove GreenCraft", icon_for("stable")):
         made.append(str(p))
 
     for fname, channel in shortcut_targets(experimental):   # chosen channel only
@@ -226,7 +259,7 @@ def create_shortcuts(exe, experimental, on_desktop=True, in_start_menu=True, ico
                 continue
             folder.mkdir(parents=True, exist_ok=True)
             p = folder / fname
-            if make_shortcut(p, exe, f"--channel {channel}", desc, icon):
+            if make_shortcut(p, exe, f"--channel {channel}", desc, icon_for(channel)):
                 made.append(str(p))
     return made
 

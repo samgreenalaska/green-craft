@@ -44,6 +44,29 @@ def hidden():
     return {"creationflags": CREATE_NO_WINDOW, "startupinfo": si}
 
 
+def asset(name):
+    """Locate a file bundled with --add-data, or None.
+
+    A onedir PyInstaller build puts data files in _internal/ beside the exe, not next
+    to the exe itself, and sets sys._MEIPASS to that directory. Looking only in
+    Path(sys.executable).parent works when running from source and silently finds
+    nothing once frozen, which is how the per-channel instance icons shipped in 0.1.9
+    doing exactly nothing. Check every location, frozen or not.
+
+    Lives here rather than in greencraft.py so install.py can use it without the two
+    importing each other.
+    """
+    import os.path
+    here = os.path.dirname(os.path.abspath(__file__))
+    exe_dir = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else None
+    for base in (getattr(sys, "_MEIPASS", None), exe_dir, here):
+        if base:
+            p = os.path.join(base, name)
+            if os.path.isfile(p):
+                return p
+    return None
+
+
 def bundle_dir():
     """The onefile extraction directory, or None when not frozen."""
     return getattr(sys, "_MEIPASS", None)

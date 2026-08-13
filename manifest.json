@@ -29,8 +29,8 @@
   },
   "channels": {
     "stable": {
-      "versionId": "0.1.10",
-      "promotedFrom": "0.1.9",
+      "versionId": "0.1.11",
+      "promotedFrom": "0.1.10",
       "server": {
         "name": "GreenCraft",
         "address": "wheatley.tail334c08.ts.net",
@@ -40,38 +40,38 @@
       "javaArgs": "-Xmx4G",
       "minUpdaterVersion": "1.0.0",
       "launcher": {
-        "version": "0.1.10",
+        "version": "0.1.11",
         "payload": {
-          "filename": "GreenCraft-0.1.10.zip",
+          "filename": "GreenCraft-0.1.11.zip",
           "hashes": {
-            "sha1": "a93a9997406691db17b4ea8637911621d11d65f7",
-            "sha512": "fdc9b4a97c0df10d8da8823fd5e7868df877a24589c18bffd8ee393818bc01ef4d1a1060a7b6d922f86c69de5a1569fe71a1f321f2335cfe3fe4100a804abaae"
+            "sha1": "b6fd5a2298eb9758c6ae0afa01a93dfb69613f26",
+            "sha512": "031a0342bc852844f7030044f394d409b9004c51ea0beb3c76864d416be00b6acfe28a9d0a1674ae4b9718fca57ce17c7439294945881ac31ff8b486a74602bd"
           },
           "downloads": [
-            "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.10/GreenCraft-0.1.10.zip"
+            "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.11/GreenCraft-0.1.11.zip"
           ],
-          "fileSize": 12565317
+          "fileSize": 12566729
         },
         "setup": {
           "filename": "GreenCraftSetup.exe",
           "hashes": {
-            "sha1": "e4e21f55ea51fe26e9e9a05e35f531b02e8ff8b5",
-            "sha512": "58172f424f4ad08e80849e49b42a882a4644a6416d4fd28274e65eb7a7416999a009521d467e0b2a6ca7011c5e6421b22cac564529b6e9a31b190cf34168a914"
+            "sha1": "00dec1fb429c3cf6237fcf5ad85083509bc344c8",
+            "sha512": "6fe617fdf292aff57028e3fe3021183e6dfe4283b6431a2929daf8433a8061ceed11ea4ca5a193b1667b604b7442b253565195ff6b099b74846efc162347f4f5"
           },
           "downloads": [
-            "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.10/GreenCraftSetup.exe"
+            "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.11/GreenCraftSetup.exe"
           ],
           "fileSize": 178176
         }
       },
       "overrides": {
-        "filename": "overrides-stable-0.1.10.zip",
+        "filename": "overrides-stable-0.1.11.zip",
         "hashes": {
           "sha1": "131697089b552baf34dd0870e5526a0cee6d3a83",
           "sha512": "f100e900d59f1e1a3b9f3a749d8336b34f2970013c58a03ecf1ede24d6ce642c1487ea028c6b4daf4b554a02fc0af60a0e40d5390c1cb54baf6e0f0dccaf55fb"
         },
         "downloads": [
-          "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.10/overrides-stable-0.1.10.zip"
+          "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.11/overrides-stable-0.1.11.zip"
         ],
         "fileSize": 23746
       },
@@ -492,7 +492,7 @@
       }
     },
     "experimental": {
-      "versionId": "0.1.10",
+      "versionId": "0.1.11",
       "promotedFrom": null,
       "server": {
         "name": "GreenCraft",
@@ -503,38 +503,38 @@
       "javaArgs": "-Xmx4G",
       "minUpdaterVersion": "1.0.0",
       "launcher": {
-        "version": "0.1.10",
+        "version": "0.1.11",
         "payload": {
-          "filename": "GreenCraft-0.1.10.zip",
+          "filename": "GreenCraft-0.1.11.zip",
           "hashes": {
-            "sha1": "a93a9997406691db17b4ea8637911621d11d65f7",
-            "sha512": "fdc9b4a97c0df10d8da8823fd5e7868df877a24589c18bffd8ee393818bc01ef4d1a1060a7b6d922f86c69de5a1569fe71a1f321f2335cfe3fe4100a804abaae"
+            "sha1": "b6fd5a2298eb9758c6ae0afa01a93dfb69613f26",
+            "sha512": "031a0342bc852844f7030044f394d409b9004c51ea0beb3c76864d416be00b6acfe28a9d0a1674ae4b9718fca57ce17c7439294945881ac31ff8b486a74602bd"
           },
           "downloads": [
-            "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.10/GreenCraft-0.1.10.zip"
+            "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.11/GreenCraft-0.1.11.zip"
           ],
-          "fileSize": 12565317
+          "fileSize": 12566729
         },
         "setup": {
           "filename": "GreenCraftSetup.exe",
           "hashes": {
-            "sha1": "e4e21f55ea51fe26e9e9a05e35f531b02e8ff8b5",
-            "sha512": "58172f424f4ad08e80849e49b42a882a4644a6416d4fd28274e65eb7a7416999a009521d467e0b2a6ca7011c5e6421b22cac564529b6e9a31b190cf34168a914"
+            "sha1": "00dec1fb429c3cf6237fcf5ad85083509bc344c8",
+            "sha512": "6fe617fdf292aff57028e3fe3021183e6dfe4283b6431a2929daf8433a8061ceed11ea4ca5a193b1667b604b7442b253565195ff6b099b74846efc162347f4f5"
           },
           "downloads": [
-            "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.10/GreenCraftSetup.exe"
+            "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.11/GreenCraftSetup.exe"
           ],
           "fileSize": 178176
         }
       },
       "overrides": {
-        "filename": "overrides-experimental-0.1.10.zip",
+        "filename": "overrides-experimental-0.1.11.zip",
         "hashes": {
           "sha1": "131697089b552baf34dd0870e5526a0cee6d3a83",
           "sha512": "f100e900d59f1e1a3b9f3a749d8336b34f2970013c58a03ecf1ede24d6ce642c1487ea028c6b4daf4b554a02fc0af60a0e40d5390c1cb54baf6e0f0dccaf55fb"
         },
         "downloads": [
-          "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.10/overrides-experimental-0.1.10.zip"
+          "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.11/overrides-experimental-0.1.11.zip"
         ],
         "fileSize": 23746
       },

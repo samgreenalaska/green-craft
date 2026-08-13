@@ -228,21 +228,10 @@ def split_java_args(java_args):
 
 
 def asset(name):
-    """Locate a file bundled with --add-data, or None.
-
-    A onedir PyInstaller build puts data files in _internal/ beside the exe, not next
-    to the exe itself, and sets sys._MEIPASS to that directory. Looking only in
-    Path(sys.executable).parent works when running from source and silently finds
-    nothing once frozen, which is how the instance icons shipped in 0.1.9 doing
-    exactly nothing. Check every location, frozen or not.
-    """
-    here = Path(__file__).resolve().parent
-    for base in (getattr(sys, "_MEIPASS", None),
-                 Path(sys.executable).parent if getattr(sys, "frozen", False) else None,
-                 here):
-        if base and (Path(base) / name).is_file():
-            return Path(base) / name
-    return None
+    """Bundled data file, or None. Implemented in procenv so install.py shares it."""
+    import procenv
+    p = procenv.asset(name)
+    return Path(p) if p else None
 
 
 def ensure_instance_icon(inst_root, channel):
@@ -638,8 +627,8 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
     # nothing to relocate -- shortcuts point straight at where we are running from.
     exe_here = inst.exe_path()
     log("Creating shortcuts...")
-    # icon=None means Windows uses the target's own icon, which is GreenCraft's -- it
-    # is embedded in the exe at build time, so there is no separate file to ship.
+    # No icon= here on purpose: create_shortcuts gives each channel its own, so the
+    # experimental shortcut shows the dog rather than the stable cat.
     made = inst.create_shortcuts(
         exe_here, opts.get("experimental", False),
         on_desktop=opts.get("desktop", True),
