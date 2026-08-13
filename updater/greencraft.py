@@ -227,6 +227,24 @@ def split_java_args(java_args):
     return lo, hi, " ".join(rest)
 
 
+def asset(name):
+    """Locate a file bundled with --add-data, or None.
+
+    A onedir PyInstaller build puts data files in _internal/ beside the exe, not next
+    to the exe itself, and sets sys._MEIPASS to that directory. Looking only in
+    Path(sys.executable).parent works when running from source and silently finds
+    nothing once frozen, which is how the instance icons shipped in 0.1.9 doing
+    exactly nothing. Check every location, frozen or not.
+    """
+    here = Path(__file__).resolve().parent
+    for base in (getattr(sys, "_MEIPASS", None),
+                 Path(sys.executable).parent if getattr(sys, "frozen", False) else None,
+                 here):
+        if base and (Path(base) / name).is_file():
+            return Path(base) / name
+    return None
+
+
 def ensure_instance_icon(inst_root, channel):
     """Give the Prism instance its own icon: a cat for stable, a dog for experimental.
 
@@ -240,10 +258,9 @@ def ensure_instance_icon(inst_root, channel):
     """
     key = f"greencraft-{channel}"
     try:
-        here = (Path(sys.executable).parent if getattr(sys, "frozen", False)
-                else Path(__file__).resolve().parent)
-        source = here / ("icon-experimental.ico" if channel == "experimental" else "icon.ico")
-        if not source.is_file():
+        source = asset("icon-experimental.ico" if channel == "experimental" else "icon.ico")
+        if source is None:
+            log("  no bundled icon found, leaving the instance icon alone")
             return
 
         icons = inst_root.parent.parent / "icons"      # instances/<id> -> <prism data>
