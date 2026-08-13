@@ -105,11 +105,22 @@ def build(channel, instance_name, version):
 
 
 def main():
+    """Re-zip both channels' override trees from what is already in overrides/.
+
+    Does NOT re-collect from a Prism instance. overrides/ is the source of truth: the
+    experimental tree is authored by update_manifest.py from the experimental instance,
+    and promote.py makes the stable tree a copy of it. Scanning DEFAULT_INSTANCE here
+    would rmtree both and refill them from a third instance, which publish.bat would
+    then ship.
+    """
     import json
     manifest = json.loads((REPO / "manifest.json").read_text(encoding="utf-8"))
     for ch in ("stable", "experimental"):
         version = manifest["channels"][ch]["versionId"]
-        n, zp, meta = build(ch, DEFAULT_INSTANCE, version)
+        tree = REPO / "overrides" / ch
+        zp = REPO / "dist" / f"overrides-{ch}-{version}.zip"
+        meta = zip_channel(tree, zp)
+        n = sum(1 for p in tree.rglob("*") if p.is_file())
         print(f"{ch}: {n} files -> {zp.name} ({meta['fileSize']} bytes)")
         print(f"  sha512: {meta['sha512']}")
 
