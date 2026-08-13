@@ -8,6 +8,7 @@
   "reauthorOwnTiles": false,
   "skipWorldSaveDimensions": false,
   "skipCaveLikeDimensions": true,
+  "lodBackend": "auto",
   "loadTimeoutSeconds": 20,
   "saveTimeoutSeconds": 30,
   "rebuildBuffersInline": true,

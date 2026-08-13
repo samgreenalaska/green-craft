@@ -36,11 +36,31 @@ def _style(root):
 
 
 def _icon_path():
-    """The .ico beside this module, or inside the PyInstaller bundle at runtime."""
+    """A path to icon.ico that Tk can hold open safely.
+
+    Not the copy inside sys._MEIPASS. Tk keeps the .ico open for the window's lifetime,
+    and a onefile build cannot delete its temp directory while a file in it is held --
+    which is what produced "Failed to remove temporary directory: ...\\_MEInnnnn" on
+    exit. Copy it out to our own folder once and point Tk at that instead.
+    """
     import os
+    import shutil
     import sys
-    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base, "icon.ico")
+
+    src = os.path.join(
+        getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "icon.ico")
+    if not getattr(sys, "frozen", False):
+        return src
+
+    dest_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "GreenCraft")
+    dest = os.path.join(dest_dir, "icon.ico")
+    try:
+        if not os.path.exists(dest) or os.path.getsize(dest) != os.path.getsize(src):
+            os.makedirs(dest_dir, exist_ok=True)
+            shutil.copyfile(src, dest)
+        return dest
+    except OSError:
+        return src
 
 
 def _centre(win, w, h):
@@ -140,6 +160,10 @@ class SetupWindow:
                         variable=self.v_desktop).pack(anchor="w", pady=2)
         ttk.Checkbutton(f, text="Add to the Start Menu",
                         variable=self.v_startmenu).pack(anchor="w", pady=2)
+        self.v_tidy = tk.BooleanVar(value=True)
+        ttk.Checkbutton(f, text="Delete this installer when finished",
+                        variable=self.v_tidy).pack(anchor="w", pady=2)
+
         ttk.Checkbutton(f, text="Also set up the Experimental channel (not recommended)",
                         variable=self.v_experimental).pack(anchor="w", pady=(10, 0))
         ttk.Label(f, text="       For testing upcoming updates. Leave this off unless\n"
@@ -210,6 +234,7 @@ class SetupWindow:
             "start_menu": self.v_startmenu.get(),
             "experimental": self.v_experimental.get(),
             "invite": self.v_invite.get().strip(),
+            "tidy_download": self.v_tidy.get(),
         }
         self._build_progress()
         threading.Thread(target=self._run, args=(opts,), daemon=True).start()
@@ -539,3 +564,4 @@ class UninstallWindow:
 
     def run(self):
         self.root.mainloop()
+

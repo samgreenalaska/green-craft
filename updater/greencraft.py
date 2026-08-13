@@ -569,9 +569,9 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
         log(f"  added '{ch['server']['name']}' to the server list")
 
     log()
-    log("Installing GreenCraft...")
-    exe_here = inst.relocate_self(inst.exe_path(), log)
-
+    # GreenCraftSetup already unpacked us into the program folder, so there is
+    # nothing to relocate -- shortcuts point straight at where we are running from.
+    exe_here = inst.exe_path()
     log("Creating shortcuts...")
     # icon=None means Windows uses the target's own icon, which is GreenCraft's -- it
     # is embedded in the exe at build time, so there is no separate file to ship.
@@ -600,8 +600,17 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
         "experimental": bool(opts.get("experimental")),
     })
 
+    # Tidy away GreenCraftSetup.exe from wherever it was downloaded, but only if it
+    # is a throwaway copy in this user's profile on a fixed disk -- never a network
+    # share, where testers run it from and others still need it.
+    if opts.get("tidy_download", True):
+        boot = inst.find_downloaded_setup()
+        if boot and inst.safe_to_delete_source(boot):
+            inst.delete_source_later(boot, log)
+
     log()
     log("Done. GreenCraft is ready.")
+    log(f"GreenCraft is installed in {inst.INSTALL_DIR}")
     log()
     # Measured on a clean machine: Prism then downloads Minecraft itself, several
     # hundred MB across a few thousand files, taking minutes with no obvious progress.
@@ -666,12 +675,17 @@ def launch_detached(prism, inst_id):
     bootloader then pops "Failed to remove temporary directory". DETACHED_PROCESS plus
     close_fds means Prism holds nothing of ours and outlives us cleanly.
     """
+    import procenv
     DETACHED_PROCESS = 0x00000008
     CREATE_NEW_PROCESS_GROUP = 0x00000200
     subprocess.Popen(
         [prism, "--launch", inst_id],
         close_fds=True,
         creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+        # Without a scrubbed PATH, Prism loads VCRUNTIME140.dll out of our onefile
+        # temp directory and pins it for its whole life -- see procenv.
+        env=procenv.child_env(),
+        cwd=str(Path(prism).parent),
     )
 
 

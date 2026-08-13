@@ -22,8 +22,8 @@
     "terrain_sorting_enabled": true
   },
   "notifications": {
-    "has_cleared_donation_button": true,
-    "has_seen_donation_prompt": true,
+    "has_cleared_donation_button": false,
+    "has_seen_donation_prompt": false,
     "has_edited_fullscreen_option": true
   }
 }

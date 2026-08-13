@@ -4,11 +4,17 @@ Scans mods/, shaderpacks/, resourcepacks/ and datapacks/, hashes everything, res
 each file against Modrinth by sha512, falls back to tools/sources.json for anything not
 published there, rebuilds the overrides bundle, and writes the result.
 
+Hand-authored per-file keys survive a rebuild: "platforms" and any "x-" annotation are
+carried forward from the previous manifest, and an entry marked for a platform this box is
+not gets kept verbatim rather than dropped -- one instance can only scan its own
+architecture.
+
 Only the experimental channel is touched. Stable is produced by promotion, never by this.
 """
 import argparse
 import hashlib
 import json
+import platform
 import subprocess
 import sys
 import urllib.error
@@ -30,6 +36,21 @@ CONTENT_DIRS = {
     "resourcepacks": (".zip",),
     "datapacks": (".zip",),
 }
+
+
+def host_platform():
+    """This box's native architecture, as the manifest spells it: "x64" or "arm64".
+
+    Same answer the updater uses at install time -- reuse prereq.arch() rather than
+    platform.machine(), which lies under ARM64 emulation.
+    """
+    try:
+        sys.path.insert(0, str(REPO))
+        from updater import prereq
+        return prereq.arch()
+    except Exception:
+        m = (platform.machine() or "").upper()
+        return "arm64" if m in ("ARM64", "AARCH64") else "x64"
 
 
 def jar_meta(path):
@@ -127,7 +148,11 @@ def main():
     ap.add_argument("--instance", help="Prism instance name (default: channel's prismInstanceId)")
     ap.add_argument("--version", help="new versionId for the experimental channel")
     ap.add_argument("--no-ssh", action="store_true", help="skip the wheatley server-side check")
+    ap.add_argument("--platform", choices=["x64", "arm64"],
+                    help="architecture this instance represents (default: this machine's)")
     args = ap.parse_args()
+
+    here = args.platform or host_platform()
 
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     ch = manifest["channels"]["experimental"]
@@ -137,7 +162,8 @@ def main():
     inst = bo.instance_dir(inst_name)
     version = args.version or ch["versionId"]
     print(f"Instance : {inst}")
-    print(f"Version  : {version}\n")
+    print(f"Version  : {version}")
+    print(f"Platform : {here}\n")
 
     print("Scanning content...")
     entries = scan(inst)
@@ -185,13 +211,20 @@ def main():
         else:
             srv = "unsupported"
 
-        files.append({
+        entry = {
             "path": e["path"],
             "hashes": {"sha1": e["sha1"], "sha512": e["sha512"]},
             "env": {"client": "required", "server": srv},
             "downloads": [url],
             "fileSize": e["size"],
-        })
+        }
+        # "platforms" and any "x-" annotation are hand-authored and unknowable from a
+        # scan -- carry them across or a rebuild quietly throws the authoring away.
+        prev = prev_files.get(e["path"], {})
+        for k, v in prev.items():
+            if k == "platforms" or k.startswith("x-"):
+                entry[k] = v
+        files.append(entry)
 
     if unresolved:
         print("\nCANNOT RESOLVE -- no Modrinth match and no tools/sources.json entry:")
@@ -204,6 +237,15 @@ def main():
         print("\nManifest NOT written.")
         return 1
 
+    # A file marked for another architecture cannot be in this instance, so its absence
+    # from the scan means nothing. Carry it through untouched -- rehashing it would need
+    # a box of that architecture.
+    scanned = {f["path"] for f in files}
+    carried = [
+        f for p, f in prev_files.items()
+        if p not in scanned and f.get("platforms") and here not in f["platforms"]
+    ]
+    files.extend(carried)
     files.sort(key=lambda f: f["path"])
 
     print("\nRebuilding overrides bundle...")
@@ -231,10 +273,18 @@ def main():
     for p in changed:
         print(f"  ~ {p}")
 
+    for f in carried:
+        print(f"  = {f['path']}  (kept: {'/'.join(f['platforms'])}-only, not on this box)")
+
     client_only = [f["path"] for f in files if f["env"]["server"] == "unsupported"]
+    marked = [f for f in files if f.get("platforms")]
     total = sum(f["fileSize"] for f in files)
     print(f"\n  {len(files)} files, {total / 1024 / 1024:.1f} MB")
     print(f"  client-only: {len(client_only)}")
+    if marked:
+        print("  platform-specific:")
+        for f in marked:
+            print(f"    {'/'.join(f['platforms']):>5}  {f['path']}")
 
     ch["versionId"] = version
     ch["pack"]["files"] = files

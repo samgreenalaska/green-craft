@@ -24,7 +24,7 @@ APPDATA = Path(os.environ.get("APPDATA", ""))
 
 # Everything GreenCraft owns lives under one folder, so "where is it installed" and
 # "what do I delete" have one answer.
-#   GreenCraft.exe                  the launcher (moved here from wherever it was run)
+#   app\GreenCraft.exe              the launcher payload, unpacked by GreenCraftSetup
 #   GreenCraft.lnk                  play, stable
 #   GreenCraft Experimental.lnk     play, experimental
 #   Uninstall GreenCraft.lnk        obvious way out without hunting through Settings
@@ -35,7 +35,8 @@ INSTALL_DIR = LOCALAPPDATA / "GreenCraft"
 STATE_FILE = INSTALL_DIR / "install.json"
 CACHE_DIR = INSTALL_DIR / "cache"
 LOG_DIR = INSTALL_DIR / "logs"
-INSTALLED_EXE = INSTALL_DIR / "GreenCraft.exe"
+APP_DIR = INSTALL_DIR / "app"
+INSTALLED_EXE = APP_DIR / "GreenCraft.exe"
 
 CREATE_NO_WINDOW = 0x08000000
 
@@ -97,9 +98,11 @@ def make_shortcut(path, target, args, description, icon=None, workdir=None):
     if icon:
         ps.append("$s.IconLocation = %s" % _q(icon))
     ps.append("$s.Save()")
+    import procenv
     subprocess.run(
         ["powershell", "-NoProfile", "-NonInteractive", "-Command", "; ".join(ps)],
         capture_output=True, creationflags=CREATE_NO_WINDOW, check=False,
+        env=procenv.child_env(),
     )
     return path.exists()
 
@@ -117,29 +120,81 @@ def shortcut_targets(experimental):
     return out
 
 
-def relocate_self(current_exe, log=print):
-    """Copy the launcher into the install folder and return the installed path.
+def find_downloaded_setup():
+    """Where the user most likely left GreenCraftSetup.exe.
 
-    People run the download from wherever it landed -- Downloads, a USB stick, a
-    network share. Shortcuts pointing there break the moment that file is tidied away,
-    and a shortcut into someone's Downloads folder is not a real installation.
+    The app is unpacked by the bootstrap, so by the time we run, the downloaded
+    installer is a leftover somewhere else. Only ordinary download locations are
+    considered, and safe_to_delete_source() still has the final say.
     """
-    INSTALL_DIR.mkdir(parents=True, exist_ok=True)
-    current_exe = Path(current_exe)
-    if current_exe.suffix.lower() != ".exe":
-        return current_exe          # running from source; leave it alone
+    home = Path(os.path.expanduser("~"))
+    for folder in (home / "Downloads", home / "Desktop", home):
+        p = folder / "GreenCraftSetup.exe"
+        if p.is_file():
+            return p
+    return None
+
+
+def safe_to_delete_source(src):
+    """Is it reasonable to delete the copy the user launched?
+
+    Only when it is a throwaway download sitting in this user's own profile. Never
+    from a network share or removable drive: testers run this build straight off
+    Z:\\2026\\claude, and deleting it there would destroy the shared copy everyone
+    else is using. Never a file that IS the installed copy either.
+    """
     try:
-        if current_exe.resolve() == INSTALLED_EXE.resolve():
-            return INSTALLED_EXE
+        src = Path(src).resolve()
+    except OSError:
+        return False
+    if src.suffix.lower() != ".exe":
+        return False
+    try:
+        if src == INSTALLED_EXE.resolve():
+            return False
     except OSError:
         pass
+
+    drive = os.path.splitdrive(str(src))[0] + "\\"
     try:
-        shutil.copy2(current_exe, INSTALLED_EXE)
-        log(f"  installed to {INSTALL_DIR}")
-        return INSTALLED_EXE
-    except OSError as e:
-        log(f"  could not copy to {INSTALL_DIR} ({e}); using {current_exe}")
-        return current_exe
+        import ctypes
+        dtype = ctypes.windll.kernel32.GetDriveTypeW(ctypes.c_wchar_p(drive))
+        # 3 = DRIVE_FIXED. Anything else (network=4, removable=2, cdrom=5) is not ours.
+        if dtype != 3:
+            return False
+    except Exception:
+        return False
+
+    profile = Path(os.path.expanduser("~")).resolve()
+    try:
+        src.relative_to(profile)
+    except ValueError:
+        return False           # outside the user's own profile
+    return True
+
+
+def delete_source_later(src, log=print):
+    """Delete the launcher we were started from, once this process has exited.
+
+    A running exe cannot delete itself, so hand the job to a detached shell that waits
+    for our PID to disappear first.
+    """
+    src = Path(src)
+    DETACHED_PROCESS = 0x00000008
+    cmd = (
+        f'ping 127.0.0.1 -n 3 >nul & '
+        f'del /f /q "{src}" >nul 2>&1'
+    )
+    try:
+        import procenv
+        subprocess.Popen(["cmd", "/c", cmd], close_fds=True,
+                         creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
+                         env=procenv.child_env(), cwd=os.environ.get("SystemRoot", "C:\\"))
+        log(f"  the downloaded copy in {src.parent.name} will be removed")
+        return True
+    except Exception as e:
+        log(f"  could not schedule removal of {src.name} ({e})")
+        return False
 
 
 def create_shortcuts(exe, experimental, on_desktop=True, in_start_menu=True, icon=None):
@@ -350,7 +405,9 @@ def uninstall_program(pattern, log=print, quiet=True):
     if "tailscale" in pattern.lower():
         log("    (Windows will ask for permission -- Tailscale runs a system service)")
     try:
-        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=600)
+        import procenv
+        r = subprocess.run(cmd, shell=True, capture_output=True, text=True,
+                           timeout=600, env=procenv.child_env())
         if r.returncode == 0:
             log(f"    removed")
             return True

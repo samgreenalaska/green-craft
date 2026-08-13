@@ -64,30 +64,31 @@ for ch, c in m.get("channels", {}).items():
     # 5. launcher block sanity -- either fully null, or fully populated
     lc = c.get("launcher") or {}
     if lc.get("version") is None:
-        if lc.get("downloads"):
-            errors.append(f"{ch}: launcher.version is null but downloads is non-empty")
+        if lc.get("payload") or lc.get("setup"):
+            errors.append(f"{ch}: launcher.version is null but payload/setup present")
         else:
             print(f"ok    {ch}: launcher not yet released (version null)")
     else:
-        if not lc.get("downloads") or not (lc.get("hashes") or {}).get("sha512"):
-            errors.append(f"{ch}: launcher.version set but downloads/sha512 incomplete")
-        else:
-            # The advertised launcher must match the exe about to be uploaded,
-            # otherwise every client self-updates to a binary that fails its own
-            # hash check.
-            exe = os.path.join(REPO, "dist", lc.get("filename", "GreenCraft.exe"))
-            if not os.path.exists(exe):
-                errors.append(f"{ch}: launcher.version set but dist/{lc.get('filename')} missing")
+        for part in ("payload", "setup"):
+            spec = lc.get(part) or {}
+            if not spec.get("downloads") or not (spec.get("hashes") or {}).get("sha512"):
+                errors.append(f"{ch}: launcher.{part} incomplete")
+                continue
+            # The advertised artifact must match what is about to be uploaded, or every
+            # client self-updates to something that fails its own hash check.
+            f = os.path.join(REPO, "dist", spec["filename"])
+            if not os.path.exists(f):
+                errors.append(f"{ch}: launcher.{part} names dist/{spec['filename']}, which is missing")
+                continue
+            d = open(f, "rb").read()
+            if hashlib.sha512(d).hexdigest() != spec["hashes"]["sha512"]:
+                errors.append(f"{ch}: dist/{spec['filename']} does not match launcher.{part}.sha512")
+            elif len(d) != spec.get("fileSize"):
+                errors.append(f"{ch}: dist/{spec['filename']} size != launcher.{part}.fileSize")
+            elif f"/v{c.get('versionId')}/" not in spec["downloads"][0]:
+                errors.append(f"{ch}: launcher.{part} URL tag does not match versionId")
             else:
-                d = open(exe, "rb").read()
-                if hashlib.sha512(d).hexdigest() != lc["hashes"]["sha512"]:
-                    errors.append(f"{ch}: dist/{lc['filename']} does not match launcher.sha512")
-                elif len(d) != lc.get("fileSize"):
-                    errors.append(f"{ch}: dist/{lc['filename']} size != launcher.fileSize")
-                else:
-                    print(f"ok    {ch}: launcher v{lc['version']} matches dist/{lc['filename']}")
-            if f"/v{c.get('versionId')}/" not in lc["downloads"][0]:
-                errors.append(f"{ch}: launcher URL tag does not match versionId")
+                print(f"ok    {ch}: launcher.{part} matches dist/{spec['filename']}")
 
 # 6. every pack file has a hash and a download
 for ch, c in m.get("channels", {}).items():

@@ -40,22 +40,32 @@ def main():
         print(f"    python tools/set_version.py {version}")
         return 1
 
-    exe = REPO / "dist" / "GreenCraft.exe"
-    if not exe.exists():
-        print("dist/GreenCraft.exe missing - run tools/build_exe.py first")
+    setup = REPO / "dist" / "GreenCraftSetup.exe"
+    payload = REPO / "dist" / f"GreenCraft-{version}.zip"
+    missing = [p.name for p in (setup, payload) if not p.exists()]
+    if missing:
+        print(f"missing in dist/: {', '.join(missing)} - run tools/build_exe.py first")
         return 1
 
     m = json.loads(M.read_text(encoding="utf-8"))
     old = m["channels"]["stable"]["versionId"]
 
-    data = exe.read_bytes()
+    def describe(path, url_name):
+        d = path.read_bytes()
+        return {
+            "filename": path.name,
+            "hashes": {"sha1": hashlib.sha1(d).hexdigest(),
+                       "sha512": hashlib.sha512(d).hexdigest()},
+            "downloads": [f"{REPO_URL}/releases/download/v{version}/{url_name}"],
+            "fileSize": len(d),
+        }
+
+    # `payload` is what both the bootstrap and self-update fetch; `setup` is recorded
+    # so a friend can be pointed at a direct download link without hunting Releases.
     launcher = {
         "version": version,
-        "filename": "GreenCraft.exe",
-        "hashes": {"sha1": hashlib.sha1(data).hexdigest(),
-                   "sha512": hashlib.sha512(data).hexdigest()},
-        "downloads": [f"{REPO_URL}/releases/download/v{version}/GreenCraft.exe"],
-        "fileSize": len(data),
+        "payload": describe(payload, payload.name),
+        "setup": describe(setup, setup.name),
     }
 
     for ch in ("stable", "experimental"):
@@ -63,7 +73,14 @@ def main():
         if ch == "stable":
             c["promotedFrom"] = old
         c["versionId"] = version
-        n, zp, meta = bo.build(ch, bo.DEFAULT_INSTANCE, version)
+        # Re-zip the tree that is already there, under the new version's filename. Do NOT
+        # re-collect from a Prism instance: update_manifest.py authored overrides/experimental
+        # from the experimental instance, and promote.py made overrides/stable a copy of it.
+        # Scanning DEFAULT_INSTANCE here would overwrite both with a third instance's config.
+        tree = REPO / "overrides" / ch
+        zp = REPO / "dist" / f"overrides-{ch}-{version}.zip"
+        meta = bo.zip_channel(tree, zp)
+        n = sum(1 for p in tree.rglob("*") if p.is_file())
         c["overrides"] = {
             "filename": zp.name,
             "hashes": {"sha1": meta["sha1"], "sha512": meta["sha512"]},
@@ -75,14 +92,16 @@ def main():
 
     # Stale zips would otherwise be picked up by publish.bat's dist\*.zip glob and
     # uploaded alongside the current ones.
-    for old_zip in (REPO / "dist").glob("overrides-*.zip"):
+    for old_zip in (REPO / "dist").glob("*.zip"):
         if version not in old_zip.name:
             old_zip.unlink()
             print(f"removed stale {old_zip.name}")
 
     M.write_text(json.dumps(m, indent=2) + "\n", encoding="utf-8")
     print(f"\n{old} -> {version}")
-    print(f"launcher: {len(data):,} bytes, sha512 {launcher['hashes']['sha512'][:32]}...")
+    print(f"setup:   {launcher['setup']['fileSize']:,} bytes")
+    print(f"payload: {launcher['payload']['fileSize']:,} bytes  "
+          f"sha512 {launcher['payload']['hashes']['sha512'][:24]}...")
     print("\nNext: python tools/verify_release.py, then publish.bat")
     return 0
 
