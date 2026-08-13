@@ -8,10 +8,15 @@ smoothly somewhere upstream, which left a one-to-two pixel gradient on every blo
 and turned the 16 and 32 -- the sizes Explorer and the taskbar actually show -- into a
 blur.
 
-Entries are stored as PNG rather than as the uncompressed bitmaps an .ico usually
-holds. Windows has read PNG-compressed icons since Vista, and it is the difference
-between 241 KB and something under 40 KB, because hard-edged art is nearly all flat
-runs. Uncompressed BMP entries cost the same whether the art is crisp or blurry.
+Entries are stored as uncompressed BMP, the format an .ico has always used, and not as
+PNG. PNG entries are legal since Vista and would cut this file from 22 KB to 13 KB, but
+they are not worth it: shipping them shrank the icon resource enough to move the app
+across Microsoft Defender's ML boundary, and GreenCraft.exe started coming back as
+Trojan:Win32/Bearfoos.A!ml on a machine where the identical Python was clean. Same art,
+BMP entries, clean. See PLAN.md.
+
+Pillow's own ICO writer is not used because it resamples with LANCZOS, which would
+smooth exactly the edges this is trying to keep hard.
 
 64 is the largest entry, deliberately. Windows scales up from it for the extra-large
 views and high-DPI desktops, and that scaling is smooth -- but the art is 64x64, so
@@ -50,13 +55,30 @@ def main():
         print(f"master must be 64x64, got {art.size[0]}x{art.size[1]}")
         return 1
 
-    import io
+    def dib(im):
+        """An icon's BMP entry: BITMAPINFOHEADER, then bottom-up BGRA, then an AND mask.
+
+        biHeight is doubled because the header describes colour and mask together. The
+        mask is left all zero; 32-bit entries are composited from the alpha channel and
+        Windows ignores it, but it still has to be present and 4-byte aligned per row.
+        """
+        n = im.size[0]
+        header = struct.pack("<IiiHHIIiiII", 40, n, n * 2, 1, 32, 0, 0, 0, 0, 0, 0)
+        px = im.load()
+        rows = []
+        for y in range(n - 1, -1, -1):
+            row = bytearray()
+            for x in range(n):
+                r, g, b, a = px[x, y]
+                row += bytes((b, g, r, a))
+            rows.append(bytes(row))
+        mask_stride = ((n + 31) // 32) * 4
+        return header + b"".join(rows) + b"\0" * (mask_stride * n)
+
     blobs = []
     for sz in SIZES:
         im = art if sz == 64 else art.resize((sz, sz), Image.NEAREST)
-        b = io.BytesIO()
-        im.save(b, "PNG", optimize=True)
-        blobs.append((sz, b.getvalue()))
+        blobs.append((sz, dib(im)))
 
     # ICONDIR, then one ICONDIRENTRY per image, then the image data.
     offset = 6 + 16 * len(blobs)

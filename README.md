@@ -15,9 +15,9 @@ Download [GreenCraftSetup.exe](../../releases/latest) and run it.
 You need Windows, **Minecraft: Java Edition** (not Bedrock) on a Microsoft account with an Xbox
 profile, and about 3 GB free. Sam sends you a personal invite link for the network.
 
-The installer is about 165 KB. It reads [`bootstrap.txt`](bootstrap.txt), downloads the launcher,
-checks it against the sha512 published there, and starts it. It unpacks nothing into your temp
-folder and leaves nothing behind.
+The installer reads [`bootstrap.txt`](bootstrap.txt), downloads the launcher, checks it against
+the sha512 published there, and starts it. It unpacks nothing into your temp folder and leaves
+nothing behind.
 
 ## How it works
 

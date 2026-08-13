@@ -122,6 +122,50 @@ for ch, c in m.get("channels", {}).items():
         if not f.get("hashes", {}).get("sha512"):
             errors.append(f"{ch}: {f['path']} has no sha512")
 
+# 7. Nothing published to the web may trip Microsoft Defender.
+#
+# v0.1.7 shipped GreenCraft.exe detected as Trojan:Win32/Bearfoos.A!ml. Defender
+# quarantined it on the user's own machine seconds after install, and caught it inside
+# the payload zip via Mark-of-the-Web when the release was downloaded in a browser. The
+# release was live and broken for every friend running Defender, which is all of them.
+# The trigger was an icon change, not a code change, so "we only touched a resource" is
+# not a reason to skip this.
+#
+# This gate runs before publish.bat commits. Pushing to the hub does not go through it,
+# by design: nothing there reaches the public.
+def defender_scan(path):
+    """Returns a list of threat names found under `path`. Empty means clean."""
+    import glob as _glob
+    import re as _re
+    import subprocess as _sub
+    plat = r"C:\ProgramData\Microsoft\Windows Defender\Platform"
+    exes = sorted(_glob.glob(os.path.join(plat, "*", "MpCmdRun.exe")))
+    if not exes:
+        return None
+    out = _sub.run([exes[-1], "-Scan", "-ScanType", "3", "-File", path,
+                    "-DisableRemediation"],
+                   capture_output=True, text=True).stdout
+    return _re.findall(r"Threat\s*:\s*(\S+)", out)
+
+DIST = os.path.join(REPO, "dist")
+if os.environ.get("GREENCRAFT_SKIP_AV"):
+    warnings.append("Defender scan skipped via GREENCRAFT_SKIP_AV")
+elif not os.path.isdir(DIST):
+    errors.append("dist/ is missing, so the Defender scan cannot run")
+else:
+    found = defender_scan(DIST)
+    if found is None:
+        errors.append(
+            "MpCmdRun.exe not found, so the release could not be scanned.\n"
+            "        Set GREENCRAFT_SKIP_AV=1 only if this machine genuinely has no Defender.")
+    elif found:
+        errors.append(
+            "Microsoft Defender flagged the release: " + ", ".join(sorted(set(found))) +
+            "\n        Do not publish. Rebuild and re-scan; an icon or resource change is "
+            "enough to cause this.")
+    else:
+        print("ok    Defender scanned dist/ and found nothing")
+
 print()
 for w in warnings:
     print(f"warn  {w}")

@@ -49,6 +49,13 @@ def build_app():
     out = DIST / "GreenCraft"
     if out.exists():
         shutil.rmtree(out, ignore_errors=True)
+    # The work directory is removed as well, not just dist. PyInstaller's cache keys the
+    # icon on its *path*, so editing icon.ico in place leaves the recorded TOC identical
+    # and it happily reuses the previously built exe -- producing a binary byte-for-byte
+    # identical to the last one, with the old icon still in it. That silently invalidated
+    # an antivirus A/B test here: the "rebuilt" binary was the previous build.
+    if WORK.exists():
+        shutil.rmtree(WORK, ignore_errors=True)
     rc = run([
         sys.executable, "-m", "PyInstaller",
         "--onedir", "--name", "GreenCraft", "--noconsole",
