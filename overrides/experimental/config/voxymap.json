@@ -1,6 +1,6 @@
 {
   "applyBudgetMillis": 16.0,
-  "pauseWhenFpsBelow": 25,
+  "pauseWhenFpsBelow": 20,
   "maxOpenRegions": 5,
   "maxOverlays": 4,
   "incompleteChunkTolerance": 0.0,
@@ -21,7 +21,7 @@
   "paletteRefreshRegions": 64,
   "verbose": true,
   "generateChunks": true,
-  "generationRadiusChunks": 32,
+  "generationRadiusChunks": 256,
   "generationIntervalTicks": 2,
   "maxActiveGenerationTasks": 16,
   "generationMinTps": 18.0,

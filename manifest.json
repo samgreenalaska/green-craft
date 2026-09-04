@@ -492,7 +492,7 @@
       }
     },
     "experimental": {
-      "versionId": "0.1.11",
+      "versionId": "0.1.12",
       "promotedFrom": null,
       "server": {
         "name": "GreenCraft",
@@ -528,18 +528,19 @@
         }
       },
       "overrides": {
-        "filename": "overrides-experimental-0.1.11.zip",
+        "filename": "overrides-experimental-0.1.12.zip",
         "hashes": {
-          "sha1": "131697089b552baf34dd0870e5526a0cee6d3a83",
-          "sha512": "f100e900d59f1e1a3b9f3a749d8336b34f2970013c58a03ecf1ede24d6ce642c1487ea028c6b4daf4b554a02fc0af60a0e40d5390c1cb54baf6e0f0dccaf55fb"
+          "sha1": "5ef03876224e4489eaa6b09e58d9b5eaa644be20",
+          "sha512": "7305693807ea4126e1b83fcd87c86305c05878be552ab2e58b592051cf46ed385c9e5a6c6727f7bbac172c9370e25f76e5c58503d21b0fb262fbd105cc61167b"
         },
         "downloads": [
-          "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.11/overrides-experimental-0.1.11.zip"
+          "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.12/overrides-experimental-0.1.12.zip"
         ],
-        "fileSize": 23746
+        "fileSize": 23792
       },
       "managedPaths": [
         "mods/",
+        "resourcepacks/",
         "shaderpacks/"
       ],
       "seededPaths": [
@@ -745,21 +746,6 @@
             "fileSize": 857483
           },
           {
-            "path": "mods/loadstone-3.0.jar",
-            "hashes": {
-              "sha1": "47562a1690e5cbfd0937993e4c751c13f96e05c6",
-              "sha512": "f9345268daa7abb1e5d595941243fef4daeb2e40f3f34cea4cdb800174af01768e5d3fd7d4241692fbb526c36ae9fc45cf49d66636f208a7e1dd0594f56db82f"
-            },
-            "env": {
-              "client": "required",
-              "server": "required"
-            },
-            "downloads": [
-              "https://cdn.modrinth.com/data/2UT1ynXh/versions/sikTvnjB/loadstone-3.0.jar"
-            ],
-            "fileSize": 129433
-          },
-          {
             "path": "mods/nvidium-0.4.4-beta3-26.2.jar",
             "hashes": {
               "sha1": "3ba506ebadfe07a1622adccc616b78c67d10e0c7",
@@ -931,6 +917,21 @@
               "https://cdn.modrinth.com/data/NcUtCpym/versions/NzjI8AbM/xaeroworldmap-fabric-26.2-1.44.2.jar"
             ],
             "fileSize": 1473719
+          },
+          {
+            "path": "resourcepacks/Matcha_Flavoured_1_12.zip",
+            "hashes": {
+              "sha1": "77d080d2fe207a886c8c784ac239dec54a213065",
+              "sha512": "90cc56fd72caea4f0f45bb3817b64e5fb76ff600bad9cf5ae4d4bc340f717d44cce4ed9f94def18b4b3902124df6d96a488c3941661e89ad863db536390db056"
+            },
+            "env": {
+              "client": "required",
+              "server": "unsupported"
+            },
+            "downloads": [
+              "https://cdn.modrinth.com/data/QI0EmgZ1/versions/E9rngRfK/Matcha_Flavoured_1_12.zip"
+            ],
+            "fileSize": 12248989
           },
           {
             "path": "shaderpacks/photon_v1.3b.zip",
