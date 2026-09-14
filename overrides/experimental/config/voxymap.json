@@ -1,7 +1,7 @@
 {
-  "applyBudgetMillis": 16.0,
+  "applyBudgetMillis": 8.0,
   "pauseWhenFpsBelow": 20,
-  "maxOpenRegions": 5,
+  "maxOpenRegions": 3,
   "maxOverlays": 4,
   "incompleteChunkTolerance": 0.0,
   "reclaimNearPlayer": true,

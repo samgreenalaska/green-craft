@@ -530,13 +530,13 @@
       "overrides": {
         "filename": "overrides-experimental-0.1.12.zip",
         "hashes": {
-          "sha1": "5ef03876224e4489eaa6b09e58d9b5eaa644be20",
-          "sha512": "7305693807ea4126e1b83fcd87c86305c05878be552ab2e58b592051cf46ed385c9e5a6c6727f7bbac172c9370e25f76e5c58503d21b0fb262fbd105cc61167b"
+          "sha1": "3f6b563c46ac30eee2b8cf7e699088261595c16d",
+          "sha512": "0dd304f02fa9792641cfb6a6325a6c9cda8fd6149487e35345dc2ca70df2fae097f4deed7820d598b65aaff5e344f682bbe0a880d12f27346257c261e73d8a5b"
         },
         "downloads": [
           "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.12/overrides-experimental-0.1.12.zip"
         ],
-        "fileSize": 23792
+        "fileSize": 24711
       },
       "managedPaths": [
         "mods/",
@@ -592,6 +592,21 @@
             "fileSize": 193030
           },
           {
+            "path": "mods/attackthroughgrass-fabric-2.1.0-26.1.jar",
+            "hashes": {
+              "sha1": "1587d8cd3e0f83e39b668d8ae27b1eeb378317c6",
+              "sha512": "c0237a688a9d56ae071e1e7b3ac79d51791b6ee25d0af8883769683fe20fdf2b33e10593b35b4fffbabcef346accedfaddf5c2ef5b7ab1d6d5184477a078d02b"
+            },
+            "env": {
+              "client": "required",
+              "server": "unsupported"
+            },
+            "downloads": [
+              "https://cdn.modrinth.com/data/OKM2WWl3/versions/btOysWCR/attackthroughgrass-fabric-2.1.0-26.1.jar"
+            ],
+            "fileSize": 25085
+          },
+          {
             "path": "mods/c2me-fabric-mc26.2-0.4.2-alpha.0.29.jar",
             "hashes": {
               "sha1": "79408044584b07f091e610ce475e3f03e6214e39",
@@ -635,6 +650,21 @@
               "https://cdn.modrinth.com/data/9s6osm5g/versions/Nv3xnWXd/cloth-config-26.2.155.jar"
             ],
             "fileSize": 1135186
+          },
+          {
+            "path": "mods/continuity-3.0.1+26.2.jar",
+            "hashes": {
+              "sha1": "8fa8bc108e84158b0828a4aa59bf906d31676eec",
+              "sha512": "3436b39fcdddce87f8eda0f35095067477636df2667195df3cb8eae2d002d3ff8ac44de97332668ee50e13ad91be5c532cbc6121878f1e6c904c98c1c9c67c0b"
+            },
+            "env": {
+              "client": "required",
+              "server": "unsupported"
+            },
+            "downloads": [
+              "https://cdn.modrinth.com/data/1IjD5062/versions/mgUN5Xz2/continuity-3.0.1%2B26.2.jar"
+            ],
+            "fileSize": 1040013
           },
           {
             "path": "mods/fabric-api-0.155.2+26.2.jar",
@@ -682,6 +712,21 @@
             "fileSize": 72677
           },
           {
+            "path": "mods/grassiergrass-fabric-1.4.5+mc26.2.jar",
+            "hashes": {
+              "sha1": "2d7e1d34ecc3113336c0f43cade547ea284e8f2b",
+              "sha512": "941fa67e6024a25c6d7b27013e4009899737983ef21a0209803ace465ec60422f451211dcce826fab38e4315c9ed3d3f67deb3909171689afa51812ac8cb2b7e"
+            },
+            "env": {
+              "client": "required",
+              "server": "unsupported"
+            },
+            "downloads": [
+              "https://cdn.modrinth.com/data/3jCB9cn2/versions/8AHVOlSX/grassiergrass-fabric-1.4.5%2Bmc26.2.jar"
+            ],
+            "fileSize": 2335051
+          },
+          {
             "path": "mods/iris-fabric-1.11.2+mc26.2.jar",
             "hashes": {
               "sha1": "f7d526b1062c4bfe2567113cf933d1de26eddd3f",
@@ -714,6 +759,21 @@
               "https://cdn.modrinth.com/data/fQEb0iXm/versions/5WeL0Nkz/krypton-0.3.1.jar"
             ],
             "fileSize": 268842
+          },
+          {
+            "path": "mods/lambdabettergrass-2.8.1+26.2.jar",
+            "hashes": {
+              "sha1": "09e0f8088f4cb22ebfab84ba0da261ae87658fdf",
+              "sha512": "308e368263d4a7ec59da6e7e0e54a0328b23717fc93afe1dddbeab62b658ed6208634fd75402061d60434611b94239453043a8fe30f51807b07888c5d9087c05"
+            },
+            "env": {
+              "client": "required",
+              "server": "unsupported"
+            },
+            "downloads": [
+              "https://cdn.modrinth.com/data/2Uev7LdA/versions/4z8ZHuGj/lambdabettergrass-2.8.1%2B26.2.jar"
+            ],
+            "fileSize": 1753647
           },
           {
             "path": "mods/lithium-fabric-0.25.2+mc26.2.jar",
