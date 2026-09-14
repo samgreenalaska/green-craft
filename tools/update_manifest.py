@@ -291,8 +291,14 @@ def main():
     ch["overrides"] = {
         "filename": zp.name,
         "hashes": {"sha1": meta["sha1"], "sha512": meta["sha512"]},
+        # Served raw from main, not a release: experimental updates far more often than
+        # stable, and a new numbered GitHub release per bump was the whole reason this
+        # broke on 2026-09-13 (manifest pointed at a release that didn't exist yet).
+        # dist/overrides-experimental.zip is committed (see .gitignore) specifically so
+        # this works exactly like manifest.json's own raw.githubusercontent.com fetch --
+        # `git push` is the entire publish step, nothing GitHub-Release-shaped required.
         "downloads": [
-            f"https://github.com/samgreenalaska/green-craft/releases/download/v{version}/{zp.name}"
+            f"https://raw.githubusercontent.com/samgreenalaska/green-craft/main/dist/{zp.name}"
         ],
         "fileSize": meta["fileSize"],
     }

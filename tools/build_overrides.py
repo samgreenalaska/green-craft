@@ -95,11 +95,20 @@ def zip_channel(srcdir, zippath):
     }
 
 
+def overrides_filename(channel, version):
+    """experimental ships from a fixed release tag (see update_manifest.py), so its
+    asset name can't carry the version -- a clobber-upload replaces the same file
+    under the same name every time. stable still cuts a real numbered release."""
+    if channel == "experimental":
+        return "overrides-experimental.zip"
+    return f"overrides-{channel}-{version}.zip"
+
+
 def build(channel, instance_name, version):
     inst = instance_dir(instance_name)
     tree = REPO / "overrides" / channel
     n = collect(inst, tree)
-    zp = REPO / "dist" / f"overrides-{channel}-{version}.zip"
+    zp = REPO / "dist" / overrides_filename(channel, version)
     meta = zip_channel(tree, zp)
     return n, zp, meta
 
@@ -118,7 +127,7 @@ def main():
     for ch in ("stable", "experimental"):
         version = manifest["channels"][ch]["versionId"]
         tree = REPO / "overrides" / ch
-        zp = REPO / "dist" / f"overrides-{ch}-{version}.zip"
+        zp = REPO / "dist" / overrides_filename(ch, version)
         meta = zip_channel(tree, zp)
         n = sum(1 for p in tree.rglob("*") if p.is_file())
         print(f"{ch}: {n} files -> {zp.name} ({meta['fileSize']} bytes)")

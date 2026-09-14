@@ -528,13 +528,13 @@
         }
       },
       "overrides": {
-        "filename": "overrides-experimental-0.1.12.zip",
+        "filename": "overrides-experimental.zip",
         "hashes": {
           "sha1": "3f6b563c46ac30eee2b8cf7e699088261595c16d",
           "sha512": "0dd304f02fa9792641cfb6a6325a6c9cda8fd6149487e35345dc2ca70df2fae097f4deed7820d598b65aaff5e344f682bbe0a880d12f27346257c261e73d8a5b"
         },
         "downloads": [
-          "https://github.com/samgreenalaska/green-craft/releases/download/v0.1.12/overrides-experimental-0.1.12.zip"
+          "https://raw.githubusercontent.com/samgreenalaska/green-craft/main/dist/overrides-experimental.zip"
         ],
         "fileSize": 24711
       },

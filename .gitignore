@@ -13,10 +13,19 @@
 !/.gitignore
 !/.gitattributes
 
-# dist/ holds built release assets (overrides zips, GreenCraft.exe). Those are uploaded
-# to GitHub Releases by publish.bat, not committed -- the source of truth is overrides/.
-# It is already excluded by /* above; named here so the intent is obvious.
-/dist/
+# dist/ holds built release assets (GreenCraft.exe, versioned overrides zips). Those are
+# uploaded to GitHub Releases by publish.bat, not committed -- the source of truth is
+# overrides/.
+#
+# Exception: overrides-experimental.zip. experimental updates far more often than stable
+# gets a real release, and a release-per-update was the whole reason this broke on
+# 2026-09-13. It's committed and served raw from main instead -- see manifest.json's
+# experimental.overrides.downloads and tools/update_manifest.py. It's a deterministic
+# rebuild of the already-committed overrides/experimental/ tree, so this is a build
+# cache entry more than new source, but committing it is what lets the raw URL work.
+!/dist/
+/dist/*
+!/dist/overrides-experimental.zip
 
 # PLAN.md is working notes, not a published artifact.
 /PLAN.md

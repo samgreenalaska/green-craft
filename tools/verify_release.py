@@ -55,11 +55,18 @@ for ch, c in m.get("channels", {}).items():
     else:
         print(f"ok    {ch}: dist/{ov['filename']} matches manifest sha512")
 
-    # 4. the release tag implied by the download URL matches the versionId
+    # 4. the release tag implied by the download URL matches the versionId --
+    #    except experimental, which is served raw from main (like manifest.json
+    #    itself) rather than as a release asset. See update_manifest.py for why.
     url = ov["downloads"][0] if ov.get("downloads") else ""
-    expect = f"/releases/download/v{c.get('versionId')}/"
-    if expect not in url:
-        errors.append(f"{ch}: overrides URL does not contain {expect}\n        {url}")
+    if ch == "experimental":
+        expect = "raw.githubusercontent.com/samgreenalaska/green-craft/main/dist/"
+        if expect not in url:
+            errors.append(f"{ch}: overrides URL does not look like a raw main fetch\n        {url}")
+    else:
+        expect = f"/releases/download/v{c.get('versionId')}/"
+        if expect not in url:
+            errors.append(f"{ch}: overrides URL does not contain {expect}\n        {url}")
 
     # 5. launcher block sanity -- either fully null, or fully populated
     lc = c.get("launcher") or {}
@@ -85,8 +92,14 @@ for ch, c in m.get("channels", {}).items():
                 errors.append(f"{ch}: dist/{spec['filename']} does not match launcher.{part}.sha512")
             elif len(d) != spec.get("fileSize"):
                 errors.append(f"{ch}: dist/{spec['filename']} size != launcher.{part}.fileSize")
-            elif f"/v{c.get('versionId')}/" not in spec["downloads"][0]:
-                errors.append(f"{ch}: launcher.{part} URL tag does not match versionId")
+            # Checked against lc["version"] (the launcher's own version), not
+            # c["versionId"] (content version) -- the launcher only moves when the
+            # setup.exe/zip itself changes, so it legitimately trails content version
+            # most of the time. Comparing against versionId here was a bug: it passed
+            # only because the two happened to always match until experimental started
+            # genuinely leading stable/launcher (2026-09-13).
+            elif f"/v{lc.get('version')}/" not in spec["downloads"][0]:
+                errors.append(f"{ch}: launcher.{part} URL tag does not match launcher.version")
             else:
                 print(f"ok    {ch}: launcher.{part} matches dist/{spec['filename']}")
 
