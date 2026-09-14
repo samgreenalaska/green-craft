@@ -530,13 +530,13 @@
       "overrides": {
         "filename": "overrides-experimental.zip",
         "hashes": {
-          "sha1": "e44ba12d6439dbd2b0cf243652fa7ce573b211f2",
-          "sha512": "30ccb91fc0398f36c54aa528463944203dd3d002198092b62445edf44bc54d14c3e84fdc49d9ac5b83d62c6122ff716232f02bb981fe5fd7795cb0b5e9475934"
+          "sha1": "fee2c3e8f3b89839b705968ecfc9dea85325490d",
+          "sha512": "85511b90f7981caff676f72620632652d4794aab964e9696a45d876125cfbbd6ce96d9b26007f732d49117b4e028a3fe27cd2390401833be7519c0e217800f7f"
         },
         "downloads": [
           "https://raw.githubusercontent.com/samgreenalaska/green-craft/main/dist/overrides-experimental.zip"
         ],
-        "fileSize": 25011
+        "fileSize": 25001
       },
       "managedPaths": [
         "mods/",
