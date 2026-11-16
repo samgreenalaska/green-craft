@@ -622,21 +622,6 @@
             "fileSize": 3842500
           },
           {
-            "path": "mods/c2me-fabric-opts-accel-opencl-mc26.2-0.4.2-alpha.0.52.jar",
-            "hashes": {
-              "sha1": "9487e5ef9f0da939558053d6415c33e2e59bc194",
-              "sha512": "7f95f0d493b01e0af55d09e80374eb213c3aaebea9b733ec8cd49b9d060369c9736d1ab499a9f143af41f04ee7ad1a84b50d5fb1dbfdcc7f3dc2370e5726fabe"
-            },
-            "env": {
-              "client": "required",
-              "server": "required"
-            },
-            "downloads": [
-              "https://cdn.modrinth.com/data/qtPMklut/versions/K2szayOS/c2me-fabric-opts-accel-opencl-mc26.2-0.4.2-alpha.0.52.jar"
-            ],
-            "fileSize": 3136915
-          },
-          {
             "path": "mods/cloth-config-26.2.155.jar",
             "hashes": {
               "sha1": "babcf16dbd15e09d326e21ffe85ab3f7d843ef9e",

@@ -38,6 +38,22 @@ CONTENT_DIRS = {
 }
 
 
+# Files the pack must never ship even when the instance has them, matched by filename
+# prefix so a version bump cannot sneak one back in.
+EXCLUDE_PREFIXES = {
+    # C2ME's OpenCL worldgen accelerator. On a GPU without cl_khr_fp64 (Snapdragon X,
+    # recent Intel iGPUs) it finds no device and, with allowIncompatibilityFallback at
+    # its default of false, kills the integrated server: singleplayer worlds never open.
+    # Clients only generate terrain in singleplayer, so the pack loses nothing by
+    # dropping it. Found on MiniMe 2026-11-16.
+    "c2me-fabric-opts-accel-opencl-": "crashes singleplayer on GPUs without fp64",
+}
+
+
+def excluded(name):
+    return next((why for pre, why in EXCLUDE_PREFIXES.items() if name.startswith(pre)), None)
+
+
 def host_platform():
     """This box's native architecture, as the manifest spells it: "x64" or "arm64".
 
@@ -71,6 +87,10 @@ def scan(inst):
             continue
         for p in sorted(d.iterdir()):
             if not p.is_file() or p.suffix.lower() not in exts:
+                continue
+            why = excluded(p.name)
+            if why:
+                print(f"  skipped {sub}/{p.name}: {why}")
                 continue
             data = p.read_bytes()
             mod_id, version, env = (jar_meta(p) if p.suffix.lower() == ".jar" else (None, None, None))
