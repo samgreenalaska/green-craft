@@ -15,6 +15,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 M = REPO / "manifest.json"
 REPO_URL = "https://github.com/samgreenalaska/green-craft"
+RAW_URL = "https://raw.githubusercontent.com/samgreenalaska/green-craft/main"
 
 sys.path.insert(0, str(REPO / "tools"))
 import build_overrides as bo
@@ -78,13 +79,19 @@ def main():
         # from the experimental instance, and promote.py made overrides/stable a copy of it.
         # Scanning DEFAULT_INSTANCE here would overwrite both with a third instance's config.
         tree = REPO / "overrides" / ch
-        zp = REPO / "dist" / f"overrides-{ch}-{version}.zip"
+        zp = REPO / "dist" / bo.overrides_filename(ch, version)
         meta = bo.zip_channel(tree, zp)
         n = sum(1 for p in tree.rglob("*") if p.is_file())
+        # experimental's bundle is committed and served raw from main (see
+        # update_manifest.py and verify_release.py); only stable is a release asset.
+        if ch == "experimental":
+            url = f"{RAW_URL}/dist/{zp.name}"
+        else:
+            url = f"{REPO_URL}/releases/download/v{version}/{zp.name}"
         c["overrides"] = {
             "filename": zp.name,
             "hashes": {"sha1": meta["sha1"], "sha512": meta["sha512"]},
-            "downloads": [f"{REPO_URL}/releases/download/v{version}/{zp.name}"],
+            "downloads": [url],
             "fileSize": meta["fileSize"],
         }
         c["launcher"] = dict(launcher)
@@ -93,7 +100,7 @@ def main():
     # Stale zips would otherwise be picked up by publish.bat's dist\*.zip glob and
     # uploaded alongside the current ones.
     for old_zip in (REPO / "dist").glob("*.zip"):
-        if version not in old_zip.name:
+        if version not in old_zip.name and old_zip.name != bo.overrides_filename("experimental", version):
             old_zip.unlink()
             print(f"removed stale {old_zip.name}")
 
