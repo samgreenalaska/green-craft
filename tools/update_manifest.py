@@ -188,6 +188,9 @@ def main():
     ap.add_argument("--no-ssh", action="store_true", help="skip the server-side check over SSH")
     ap.add_argument("--platform", choices=["x64", "arm64"],
                     help="architecture this instance represents (default: this machine's)")
+    ap.add_argument("--allow-unreleased", action="append", default=[], metavar="MOD_ID",
+                    help="write this mod's sources.json URL even though it does not resolve yet, "
+                         "e.g. to benchmark a build before its release; repeatable")
     args = ap.parse_args()
 
     here = args.platform or host_platform()
@@ -241,7 +244,10 @@ def main():
                 continue
             url = src["url"].format(version=e["version"] or "", filename=e["file"])
             ok, why = head_ok(url, e["size"])
-            if not ok:
+            if not ok and e["id"] in args.allow_unreleased:
+                print(f"  WARNING: {e['file']} is not downloadable yet ({why}); written anyway"
+                      " (--allow-unreleased). verify_release.py refuses to publish until it is.")
+            elif not ok:
                 unresolved.append({**e, "why": f"sources.json URL unusable: {why}\n      {url}"})
                 continue
             print(f"  sources.json -> {e['file']} ({why})")

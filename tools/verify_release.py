@@ -134,6 +134,24 @@ for ch, c in m.get("channels", {}).items():
             errors.append(f"{ch}: {f['path']} has no downloads")
         if not f.get("hashes", {}).get("sha512"):
             errors.append(f"{ch}: {f['path']} has no sha512")
+        # 6b. Downloads that are not Modrinth's (which update_manifest resolved by hash)
+        #     must actually exist. update_manifest.py --allow-unreleased can write the URL
+        #     of a release that has not been made yet, for local testing; this is what stops
+        #     that manifest reaching friends, whose updaters would all fail on the 404.
+        url = (f.get("downloads") or [""])[0]
+        if url and "cdn.modrinth.com/" not in url:
+            import urllib.request
+            try:
+                req = urllib.request.Request(url, method="HEAD",
+                                             headers={"User-Agent": "green-craft-verify/0.1"})
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    size = r.headers.get("Content-Length")
+                if size is not None and int(size) != f.get("fileSize"):
+                    errors.append(f"{ch}: {f['path']} download is {size} bytes, manifest says {f.get('fileSize')}\n        {url}")
+                else:
+                    print(f"ok    {ch}: {f['path']} download reachable")
+            except Exception as e:
+                errors.append(f"{ch}: {f['path']} download not reachable ({e})\n        {url}")
 
 # 7. Nothing published to the web may trip Microsoft Defender.
 #
