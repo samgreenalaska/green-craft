@@ -15,6 +15,7 @@ import argparse
 import hashlib
 import json
 import platform
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -128,6 +129,26 @@ def modrinth_bulk(entries):
         return {}
 
 
+def modrinth_project(url):
+    """The Modrinth project id in a cdn.modrinth.com download URL, else None."""
+    m = re.search(r"cdn\.modrinth\.com/data/([^/]+)/", url or "")
+    return m.group(1) if m else None
+
+
+def instance_deps(inst):
+    """Minecraft and Fabric Loader versions from the instance's mmc-pack.json.
+
+    The pack's dependencies must follow the instance the mods were scanned from, or a
+    Minecraft bump ships new-version mods on the old game. Returns None if unreadable.
+    """
+    try:
+        comps = json.loads((Path(inst).parent / "mmc-pack.json").read_text(encoding="utf-8"))["components"]
+        v = {c["uid"]: c["version"] for c in comps}
+        return {"minecraft": v["net.minecraft"], "fabric-loader": v["net.fabricmc.fabric-loader"]}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def head_ok(url, expect_size=None):
     try:
         req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": UA})
@@ -174,6 +195,11 @@ def main():
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     ch = manifest["channels"]["experimental"]
     prev_files = {f["path"]: f for f in ch.get("pack", {}).get("files", [])}
+    prev_by_project = {}
+    for f in prev_files.values():
+        pid = modrinth_project(f["downloads"][0])
+        if pid:
+            prev_by_project[pid] = f
 
     inst_name = args.instance or ch.get("prismInstanceId") or bo.DEFAULT_INSTANCE
     inst = bo.instance_dir(inst_name)
@@ -237,7 +263,9 @@ def main():
         }
         # "platforms" and any "x-" annotation are hand-authored and unknowable from a
         # scan -- carry them across or a rebuild quietly throws the authoring away.
-        prev = prev_files.get(e["path"], {})
+        # Match by path first, then by Modrinth project: a version bump renames the
+        # file, and losing DH's arm64 marker that way would ship it to x64 too.
+        prev = prev_files.get(e["path"]) or prev_by_project.get(modrinth_project(url), {})
         for k, v in prev.items():
             if k == "platforms" or k.startswith("x-"):
                 entry[k] = v
@@ -302,6 +330,16 @@ def main():
         print("  platform-specific:")
         for f in marked:
             print(f"    {'/'.join(f['platforms']):>5}  {f['path']}")
+
+    deps = instance_deps(inst)
+    if deps is None:
+        print("\n  WARNING: could not read the instance's mmc-pack.json; pack.dependencies left as is")
+    else:
+        old = ch["pack"].get("dependencies", {})
+        for k, v in deps.items():
+            if old.get(k) != v:
+                print(f"  ~ dependencies.{k}: {old.get(k)} -> {v}")
+        ch["pack"]["dependencies"] = {**old, **deps}
 
     ch["versionId"] = version
     ch["pack"]["files"] = files

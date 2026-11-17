@@ -97,6 +97,23 @@ def promote_server():
             print(f"  ERROR: {d} missing on {st.NAME}")
             raise SystemExit(1)
 
+    # World datapacks are version-bound too: after the 26.3 bump, 26.2 zips left in
+    # world/datapacks stopped the server at "Failed to load registries". They live in
+    # world/, which this script never touches, so refuse here, before anything stops,
+    # and say what to move.
+    packs = {}
+    for side in ("stable", "experimental"):
+        out = ssh(own(f"ls {MC}/server-{side}/world/datapacks 2>/dev/null || true"))
+        packs[side] = {l.strip() for l in out.splitlines() if l.strip()}
+    stale = sorted(packs["stable"] - packs["experimental"])
+    if stale:
+        print("  REFUSING: server-stable/world/datapacks has packs experimental does not:")
+        for p in stale:
+            print(f"    {p}")
+        print("  experimental has: " + (", ".join(sorted(packs["experimental"])) or "(none)"))
+        print("  Move or replace those by hand (the world is never touched here), then rerun.")
+        raise SystemExit(1)
+
     print("  stopping server...")
     ssh("sudo systemctl stop minecraft")
 
@@ -105,6 +122,12 @@ def promote_server():
 
     print("  copying experimental mods -> stable")
     ssh(own(f"cp -a {MC}/server-experimental/mods {MC}/server-stable/mods"))
+
+    # The Fabric server launcher pins the Minecraft and loader versions, so it has to
+    # follow the mods or a version bump starts new mods on the old game.
+    print("  copying fabric-server-launch.jar (previous kept as .prev)")
+    ssh(own(f"cp -a {MC}/server-stable/fabric-server-launch.jar {MC}/server-stable/fabric-server-launch.jar.prev"
+            f" && cp -a {MC}/server-experimental/fabric-server-launch.jar {MC}/server-stable/fabric-server-launch.jar"))
 
     # config only, additive. No --delete: a stale config for a removed mod is inert,
     # whereas deleting one that stable still needs is not.
@@ -168,6 +191,7 @@ def main():
     print("  2. publish.bat \"promote " + str(version) + "\"")
     print(f"  Rollback: git revert the publish commit, then on {st.NAME}")
     print("    rm -rf server-stable/mods && mv server-stable/mods.prev server-stable/mods")
+    print("    mv server-stable/fabric-server-launch.jar.prev server-stable/fabric-server-launch.jar")
     print("    mc-channel stable")
     return 0
 

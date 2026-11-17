@@ -64,7 +64,7 @@ damageTiltStrength:1.0
 highContrast:false
 highContrastBlockOutline:false
 narratorHotkey:true
-resourcePacks:["vanilla","file/Matcha_Flavoured_1_12.zip"]
+resourcePacks:["vanilla","file/MFRP_1_12_9_26_3.zip"]
 incompatibleResourcePacks:[]
 lastServer:100.92.154.5
 lang:en_us

@@ -323,6 +323,44 @@ def ensure_instance_icon(inst_root, channel):
         log(f"  could not set the instance icon: {e}")
 
 
+def retarget_pack(pack, deps):
+    """Move an existing instance to the manifest's Minecraft and loader versions.
+
+    Without this, a pack update that changes the Minecraft version installs the new
+    mods into an instance still on the old game, and it fails to launch. Only the
+    three components the manifest names are touched. Their cached* fields go, since
+    they describe the old version, and so does the LWJGL component when Minecraft
+    moves: Prism re-adds whichever LWJGL the new version asks for, exactly as it does
+    for the fresh pack written above, which never lists one.
+    """
+    want = {
+        "net.minecraft": deps["minecraft"],
+        "net.fabricmc.intermediary": deps["minecraft"],
+        "net.fabricmc.fabric-loader": deps["fabric-loader"],
+    }
+    try:
+        data = json.loads(pack.read_text(encoding="utf-8"))
+        comps = data["components"]
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        log(f"  WARNING: could not read {pack.name} ({e}); leaving it alone")
+        return False
+    moved = []
+    for c in comps:
+        uid = c.get("uid")
+        if uid in want and c.get("version") != want[uid]:
+            moved.append(f"{uid.rsplit('.', 1)[-1]} {c.get('version')} -> {want[uid]}")
+            c["version"] = want[uid]
+            for k in [k for k in c if k.startswith("cached")]:
+                del c[k]
+    if not moved:
+        return False
+    if any(m.startswith("minecraft ") for m in moved):
+        data["components"] = [c for c in comps if c.get("uid") != "org.lwjgl3"]
+    pack.write_text(json.dumps(data, indent=4) + "\n", encoding="utf-8")
+    log("  instance moved: " + ", ".join(moved))
+    return True
+
+
 def ensure_instance(inst_root, channel_name, deps, java_args):
     """Create the Prism instance skeleton if it isn't there. Never overwrites an
     existing instance.cfg -- that file holds the user's own memory/Java settings."""
@@ -348,6 +386,7 @@ def ensure_instance(inst_root, channel_name, deps, java_args):
         created_pack = True
     else:
         created_pack = False
+        retarget_pack(pack, deps)
 
     lo, hi, rest = split_java_args(java_args)
 
