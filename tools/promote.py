@@ -1,53 +1,32 @@
-"""Promote experimental -> stable, on both the manifest and wheatley.
+"""Promote experimental -> stable, on both the manifest and the server host.
 
 Stable is never authored. It is only ever a byte-for-byte copy of an experimental
 channel that has been tested, so what friends receive is what was actually run.
 
-Deliberately does NOT touch world/. Both servers live on wheatley with their own
+Deliberately does NOT touch world/. Both servers live on the same host with their own
 independently-seeded worlds; copying experimental's world over stable would replace
 every friend's progress with test terrain. That is the one mistake in this design
 that no rollback recovers from, so it is asserted rather than assumed.
+
+The host comes from server_target.py (GREENCRAFT_SERVER overrides it for one run).
 """
 import argparse
 import copy
 import json
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
 import build_overrides as bo
+import server_target as st
 
 REPO = Path(__file__).resolve().parent.parent
 MANIFEST = REPO / "manifest.json"
-MC = "~/Desktop/Minecraft"
+MC = st.MC
 
 
 def ssh(cmd, check=True, timeout=180):
-    r = subprocess.run(
-        ["ssh", "-o", "ConnectTimeout=15", "wheatley", cmd],
-        capture_output=True, text=True, timeout=timeout,
-    )
-    if check and r.returncode != 0:
-        print(f"  ssh failed: {cmd}")
-        print(f"  {r.stderr.strip()[:400]}")
-        raise SystemExit(1)
-    return r.stdout.strip()
-
-
-def players_online():
-    out = ssh(
-        "curl -sf --max-time 5 http://100.92.154.56:8080/api/current || true",
-        check=False,
-    )
-    if not out:
-        return None, []
-    try:
-        mc = json.loads(out).get("mc") or {}
-    except Exception:
-        return None, []
-    p = mc.get("players")
-    return (p if isinstance(p, int) else None), (mc.get("names") or [])
+    return st.ssh(cmd, check=check, timeout=timeout).stdout.strip()
 
 
 def promote_manifest():
@@ -98,44 +77,46 @@ def diff_packs(old, new):
 
 
 def promote_server():
-    print("\n=== wheatley ===")
+    print(f"\n=== {st.NAME} ===")
 
-    n, names = players_online()
+    n = st.players_online()
     if n is None:
-        print("  WARNING: could not read player count from the dashboard.")
+        print("  WARNING: could not read the player count.")
     elif n > 0:
-        print(f"  REFUSING: {n} player(s) online: {', '.join(names)}")
+        print(f"  REFUSING: {n} player(s) online.")
         print("  Promotion stops and restarts the server. Wait, or kick them first.")
         raise SystemExit(1)
     else:
         print("  players online: 0")
 
+    own = st.as_owner
+
     # Sanity: never proceed if the directories aren't what we expect.
     for d in ("server-stable/mods", "server-experimental/mods"):
-        if ssh(f"test -d {MC}/{d} && echo yes || echo no") != "yes":
-            print(f"  ERROR: {d} missing on wheatley")
+        if ssh(own(f"test -d {MC}/{d} && echo yes || echo no")) != "yes":
+            print(f"  ERROR: {d} missing on {st.NAME}")
             raise SystemExit(1)
 
     print("  stopping server...")
     ssh("sudo systemctl stop minecraft")
 
     print("  backing up server-stable/mods -> mods.prev")
-    ssh(f"rm -rf {MC}/server-stable/mods.prev && mv {MC}/server-stable/mods {MC}/server-stable/mods.prev")
+    ssh(own(f"rm -rf {MC}/server-stable/mods.prev && mv {MC}/server-stable/mods {MC}/server-stable/mods.prev"))
 
     print("  copying experimental mods -> stable")
-    ssh(f"cp -a {MC}/server-experimental/mods {MC}/server-stable/mods")
+    ssh(own(f"cp -a {MC}/server-experimental/mods {MC}/server-stable/mods"))
 
     # config only, additive. No --delete: a stale config for a removed mod is inert,
     # whereas deleting one that stable still needs is not.
     print("  syncing config (additive)")
-    ssh(f"rsync -a {MC}/server-experimental/config/ {MC}/server-stable/config/")
+    ssh(own(f"rsync -a {MC}/server-experimental/config/ {MC}/server-stable/config/"))
 
     # Loud assertion rather than a silent assumption.
-    worlds = ssh(f"stat -c%Y {MC}/server-stable/world 2>/dev/null || echo missing")
+    worlds = ssh(own(f"stat -c%Y {MC}/server-stable/world 2>/dev/null || echo missing"))
     print(f"  server-stable/world untouched (mtime {worlds})")
 
     print("  switching active channel to stable and starting...")
-    out = ssh("~/.local/bin/mc-channel stable", timeout=240)
+    out = ssh(f"{st.T['mc_channel']} stable", timeout=240)
     for line in out.splitlines():
         print(f"    {line}")
 
@@ -143,7 +124,7 @@ def promote_server():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
-    ap.add_argument("--manifest-only", action="store_true", help="don't touch wheatley")
+    ap.add_argument("--manifest-only", action="store_true", help="don't touch the server host")
     args = ap.parse_args()
 
     before = json.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -178,14 +159,14 @@ def main():
         print("  NOTE: hashes differ, so the override trees genuinely differ. Check that.")
 
     if args.manifest_only:
-        print("\n--manifest-only: wheatley not touched.")
+        print(f"\n--manifest-only: {st.NAME} not touched.")
     else:
         promote_server()
 
     print("\n=== Next ===")
     print("  1. Join and sanity-check the stable server.")
     print("  2. publish.bat \"promote " + str(version) + "\"")
-    print("  Rollback: git revert the publish commit, then on wheatley")
+    print(f"  Rollback: git revert the publish commit, then on {st.NAME}")
     print("    rm -rf server-stable/mods && mv server-stable/mods.prev server-stable/mods")
     print("    mc-channel stable")
     return 0

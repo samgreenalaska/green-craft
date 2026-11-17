@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""mc-players -- print how many players are on the local Minecraft server.
+
+Replaces the wheatley dashboard's /api/current as the "is anyone online?" check
+used by mc-channel and promote.py. Does a Server List Ping (the same request the
+multiplayer screen makes) to 127.0.0.1:25565.
+
+Prints the player count, or "?" if the server does not answer. "?" means unknown,
+never zero: callers must refuse to stop the server on "?" without --force.
+Names are not printed: hide-online-players=true leaves the sample empty.
+"""
+import json
+import socket
+import struct
+import sys
+
+HOST = "127.0.0.1"
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 25565
+
+
+def varint(n):
+    out = b""
+    while True:
+        b = n & 0x7F
+        n >>= 7
+        out += bytes([b | (0x80 if n else 0)])
+        if not n:
+            return out
+
+
+def read_varint(sock):
+    n = shift = 0
+    while True:
+        b = sock.recv(1)
+        if not b:
+            raise ConnectionError("closed")
+        n |= (b[0] & 0x7F) << shift
+        if not b[0] & 0x80:
+            return n
+        shift += 7
+
+
+def recv_exact(sock, n):
+    buf = b""
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionError("closed")
+        buf += chunk
+    return buf
+
+
+def ping():
+    with socket.create_connection((HOST, PORT), timeout=5) as s:
+        host = HOST.encode()
+        # handshake: protocol -1 (any), address, port, next state 1 (status)
+        body = varint(0) + varint(0xFFFFFFFF) + varint(len(host)) + host \
+            + struct.pack(">H", PORT) + varint(1)
+        s.sendall(varint(len(body)) + body)
+        s.sendall(varint(1) + varint(0))  # status request
+        read_varint(s)                    # packet length
+        if read_varint(s) != 0:
+            raise ValueError("unexpected packet")
+        data = recv_exact(s, read_varint(s))
+        return json.loads(data)
+
+
+try:
+    status = ping()
+    print(int(status["players"]["online"]))
+except Exception:
+    print("?")

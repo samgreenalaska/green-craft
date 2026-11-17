@@ -279,9 +279,9 @@ def open_invite(url, log):
 
 
 def wait_for_server(host, port, log, timeout=600):
-    """Poll until the shared machine answers. This is what actually proves the share
-    was accepted -- the client can be connected to its own tailnet and still not see
-    wheatley until the invite is taken."""
+    """Poll until the server answers. Over Tailscale this is what actually proves the
+    share was accepted -- the client can be connected to its own tailnet and still not
+    see the server until the invite is taken."""
     log(f"  waiting for {host} to become reachable...")
     deadline = time.time() + timeout
     while time.time() < deadline:

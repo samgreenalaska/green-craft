@@ -208,18 +208,40 @@ def normalise_address(ip):
     return ip.lower()
 
 
-def upsert_server(path, name, ip):
+def upsert_server(path, name, ip, previous=()):
     """Add or update our entry without disturbing servers the user added themselves.
 
     Matches on address rather than name: the address identifies the server, and the
     user is free to rename it in their own list.
+
+    previous lists addresses the server used to have. Entries pointing at them are
+    ours too, just stale: when the server moves, matching on the new address alone
+    would leave the old entry behind as a second, dead "GreenCraft". The first stale
+    entry is reused for the new address, the rest are dropped.
     """
     servers = read_servers_dat(path)
     target = normalise_address(ip)
+    retired_addrs = {normalise_address(p) for p in previous} - {target, ""}
 
-    mine = [s for s in servers if normalise_address(s.get("ip", {}).get("value")) == target]
-    others = [s for s in servers if normalise_address(s.get("ip", {}).get("value")) != target]
+    def addr(s):
+        return normalise_address(s.get("ip", {}).get("value"))
 
+    mine = [s for s in servers if addr(s) == target]
+    retired = [s for s in servers if addr(s) in retired_addrs]
+    others = [s for s in servers if addr(s) != target and addr(s) not in retired_addrs]
+
+    if not mine and retired:
+        entry = retired[0]
+        entry["name"] = {"__tag__": TAG_STRING, "value": name}
+        entry["ip"] = {"__tag__": TAG_STRING, "value": ip}
+        entry["hidden"] = {"__tag__": TAG_BYTE, "value": 0}
+        write_servers_dat(path, [entry] + others)
+        return f"moved to {ip}" + (f" (removed {len(retired) - 1} duplicate)"
+                                   if len(retired) > 1 else "")
+
+    # Both old and new entries present (a manual add, or syncs on both sides of the
+    # move): the branch below keeps the current one, and the stale ones are already
+    # excluded from `others`, so they are dropped.
     if mine:
         # The client adds its own quick-play entry each time it connects, so several
         # can accumulate for one address. Collapse them into one.
@@ -240,6 +262,9 @@ def upsert_server(path, name, ip):
             result = "unchanged"
         else:
             result = "updated"
+        if retired:
+            result += f", removed {len(retired)} old address entr" \
+                      f"{'y' if len(retired) == 1 else 'ies'}"
     else:
         entry = server_entry(name, ip)
         result = "added"

@@ -3,15 +3,26 @@
 # experimental GreenCraft channels.
 #
 # Only one server can run at a time: they share the :25565 bind and the mc
-# screen session, and the box has 3.2 GB. The active-server symlink selects
-# which one minecraft.service launches.
+# screen session. The active-server symlink selects which one
+# minecraft.service launches.
 #
-# Always goes through systemd. A hand-started server gets a 3G heap instead of
-# the 2G that heap.conf sets, and leaves minecraft.service reading inactive
-# while a world is up -- see wheatley/CLAUDE.md.
+# Always goes through systemd. A hand-started server skips the unit's heap
+# setting and leaves minecraft.service reading inactive while a world is up.
+#
+# Runs on either host. Cavern: files in /srv/minecraft, owned by the
+# minecraft user, players from mc-players; run as a sudoer (ubuntu).
+# wheatley: files in ~/Desktop/Minecraft, players from its dashboard.
 set -euo pipefail
 
-MC="$HOME/Desktop/Minecraft"
+# /srv/minecraft itself, not a path inside it: it is mode 750, so the sudoer
+# running this cannot see into it without sudo.
+if [[ -d /srv/minecraft ]]; then
+  MC=/srv/minecraft
+  AS=(sudo -u minecraft)
+else
+  MC="$HOME/Desktop/Minecraft"
+  AS=()
+fi
 DASH="http://100.92.154.56:8080/api/current"
 
 usage() {
@@ -21,15 +32,25 @@ usage() {
 
 current_channel() {
   local t
-  t=$(readlink -f "$MC/active-server" 2>/dev/null) || { echo "unknown"; return; }
+  t=$("${AS[@]}" readlink -f "$MC/active-server" 2>/dev/null) || { echo "unknown"; return; }
   basename "$t" | sed 's/^server-//'
 }
 
 players_online() {
-  # Prints "<count> <names>"; prints "? " if the dashboard is unreachable.
+  # Prints "<count> <names>"; prints "? " when it cannot tell.
+  # Unknown must never read as zero -- bash would evaluate a bare "None" as 0
+  # in an arithmetic test and wave the switch through. A stopped server is the
+  # one case that is genuinely zero.
+  if ! systemctl is-active --quiet minecraft; then
+    echo "0 "
+    return
+  fi
+  if command -v mc-players >/dev/null; then
+    echo "$(mc-players) "
+    return
+  fi
   # The dashboard reports players as null between polls (e.g. just after a
-  # restart). That must read as unknown, not as zero -- bash would evaluate a
-  # bare "None" as 0 in an arithmetic test and wave the switch through.
+  # restart); that reads as unknown too.
   curl -sf --max-time 5 "$DASH" 2>/dev/null | python3 -c '
 import json, sys
 try:
@@ -58,7 +79,7 @@ case "$target" in
 esac
 
 dir="$MC/server-$target"
-[[ -d "$dir" ]] || { echo "no such server directory: $dir" >&2; exit 1; }
+"${AS[@]}" test -d "$dir" || { echo "no such server directory: $dir" >&2; exit 1; }
 
 if [[ "$(current_channel)" == "$target" ]] && systemctl is-active --quiet minecraft; then
   echo "already on $target and running"
@@ -70,7 +91,7 @@ read -r n names <<<"$(players_online)"
 if [[ -n "$force" ]]; then
   :
 elif [[ "$n" == "?" ]]; then
-  echo "WARNING: dashboard unreachable, cannot check for players." >&2
+  echo "WARNING: cannot read the player count." >&2
   echo "Re-run with --force if you're sure nobody is online." >&2
   exit 1
 elif [[ "${n:-0}" -gt 0 ]]; then
@@ -81,14 +102,14 @@ fi
 
 echo "switching $(current_channel) -> $target"
 sudo systemctl stop minecraft
-ln -sfn "$dir" "$MC/active-server"
+"${AS[@]}" ln -sfn "$dir" "$MC/active-server"
 sudo systemctl start minecraft
 
 # Wait for it to actually come up rather than reporting success on a start that failed.
 for _ in $(seq 1 30); do
   sleep 2
-  if grep -q 'Done (' "$dir/logs/latest.log" 2>/dev/null; then
-    echo "up on $target: $(grep -o 'motd=.*' "$dir/server.properties")"
+  if "${AS[@]}" grep -q 'Done (' "$dir/logs/latest.log" 2>/dev/null; then
+    echo "up on $target: $("${AS[@]}" grep -o 'motd=.*' "$dir/server.properties")"
     exit 0
   fi
 done

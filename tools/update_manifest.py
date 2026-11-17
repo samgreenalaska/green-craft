@@ -15,7 +15,6 @@ import argparse
 import hashlib
 import json
 import platform
-import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -23,6 +22,7 @@ import zipfile
 from pathlib import Path
 
 import build_overrides as bo
+import server_target as st
 
 REPO = Path(__file__).resolve().parent.parent
 MANIFEST = REPO / "manifest.json"
@@ -145,21 +145,18 @@ def head_ok(url, expect_size=None):
 
 
 def server_mod_files(no_ssh):
-    """Filenames in wheatley's server-experimental/mods, for env.server markers."""
+    """Filenames in the server's server-experimental/mods, for env.server markers."""
     if no_ssh:
         return None
     try:
-        r = subprocess.run(
-            ["ssh", "-o", "ConnectTimeout=10", "wheatley",
-             "ls ~/Desktop/Minecraft/server-experimental/mods/"],
-            capture_output=True, text=True, timeout=45,
-        )
+        r = st.ssh(st.as_owner(f"ls {st.MC}/server-experimental/mods/"),
+                   check=False, timeout=45)
         if r.returncode != 0:
-            print(f"  WARNING: could not reach wheatley ({r.stderr.strip()[:80]})")
+            print(f"  WARNING: could not reach {st.NAME} ({r.stderr.strip()[:80]})")
             return None
         return {ln.strip() for ln in r.stdout.splitlines() if ln.strip()}
     except Exception as e:
-        print(f"  WARNING: could not reach wheatley ({e})")
+        print(f"  WARNING: could not reach {st.NAME} ({e})")
         return None
 
 
@@ -167,7 +164,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--instance", help="Prism instance name (default: channel's prismInstanceId)")
     ap.add_argument("--version", help="new versionId for the experimental channel")
-    ap.add_argument("--no-ssh", action="store_true", help="skip the wheatley server-side check")
+    ap.add_argument("--no-ssh", action="store_true", help="skip the server-side check over SSH")
     ap.add_argument("--platform", choices=["x64", "arm64"],
                     help="architecture this instance represents (default: this machine's)")
     args = ap.parse_args()
@@ -193,13 +190,13 @@ def main():
     for k, v in sorted(by_dir.items()):
         print(f"  {k}: {v}")
     if "datapacks" not in by_dir:
-        print("  datapacks: none (server datapacks live on wheatley, not in the client pack)")
+        print("  datapacks: none (server datapacks live on the server, not in the client pack)")
 
     print("\nResolving against Modrinth...")
     found = modrinth_bulk(entries)
     sources = json.loads(SOURCES.read_text(encoding="utf-8"))
 
-    print("\nChecking wheatley for server-side membership...")
+    print(f"\nChecking {st.NAME} for server-side membership...")
     server_files = server_mod_files(args.no_ssh)
     if server_files is None:
         print("  carrying forward existing env markers where possible")
@@ -223,7 +220,7 @@ def main():
                 continue
             print(f"  sources.json -> {e['file']} ({why})")
 
-        # env.server: prefer ground truth from wheatley; else keep what the manifest said.
+        # env.server: prefer ground truth from the server; else keep what the manifest said.
         if e["path"].startswith("mods/") and server_files is not None:
             srv = "required" if e["file"] in server_files else "unsupported"
         elif e["path"] in prev_files:

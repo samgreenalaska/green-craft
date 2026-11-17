@@ -75,8 +75,9 @@ class SetupWindow:
     with (options, log) and must not touch tkinter directly."""
 
     def __init__(self, work, title="GreenCraft Setup", uninstall_work=None,
-                 world_count=0, installed=False):
+                 world_count=0, installed=False, show_tailscale=True):
         self.work = work
+        self.show_tailscale = show_tailscale
         self.uninstall_work = uninstall_work
         self.world_count = world_count
         self.installed = installed
@@ -132,25 +133,25 @@ class SetupWindow:
                   style="Muted.TLabel").pack(anchor="w", pady=(2, 16))
 
         ttk.Label(f, text="This will set up:", style="TLabel").pack(anchor="w")
-        for line in (
-            "Tailscale, so you can reach the server",
-            "Prism Launcher and Minecraft",
-            "The server's mods and shader pack",
-        ):
+        lines = ["Prism Launcher and Minecraft", "The server's mods and shader pack"]
+        if self.show_tailscale:
+            lines.insert(0, "Tailscale, so you can reach the server")
+        for line in lines:
             ttk.Label(f, text=f"   •  {line}", style="Muted.TLabel").pack(anchor="w")
 
         ttk.Separator(f).pack(fill="x", pady=14)
 
-        ttk.Label(f, text="Paste the invite link you were sent:",
-                  style="TLabel").pack(anchor="w")
         self.v_invite = tk.StringVar(value="")
-        e = ttk.Entry(f, textvariable=self.v_invite)
-        e.pack(fill="x", pady=(4, 2))
-        ttk.Label(f, text="Opens automatically at the right moment. Leave blank if you\n"
-                          "have already accepted it.",
-                  style="Muted.TLabel").pack(anchor="w")
+        if self.show_tailscale:
+            ttk.Label(f, text="Paste the invite link you were sent:",
+                      style="TLabel").pack(anchor="w")
+            e = ttk.Entry(f, textvariable=self.v_invite)
+            e.pack(fill="x", pady=(4, 2))
+            ttk.Label(f, text="Opens automatically at the right moment. Leave blank if you\n"
+                              "have already accepted it.",
+                      style="Muted.TLabel").pack(anchor="w")
 
-        ttk.Separator(f).pack(fill="x", pady=14)
+            ttk.Separator(f).pack(fill="x", pady=14)
 
         self.v_desktop = tk.BooleanVar(value=True)
         self.v_startmenu = tk.BooleanVar(value=False)

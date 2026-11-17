@@ -130,6 +130,31 @@ def load_manifest(src):
     return json.loads(Path(src).read_text(encoding="utf-8"))
 
 
+def needs_tailscale(manifest):
+    """True while the server is reached over Tailscale.
+
+    The manifest decides, through the presence of prerequisites.tailscale, so moving
+    the server to a public address takes a manifest edit, not a launcher release.
+    """
+    return "tailscale" in (manifest.get("prerequisites") or {})
+
+
+def server_address(ch):
+    """The address to put in servers.dat, with the port only when it is not 25565."""
+    srv = ch["server"]
+    addr = srv["address"]
+    if srv.get("port") and int(srv["port"]) != 25565:
+        addr = f"{addr}:{srv['port']}"
+    return addr
+
+
+def upsert_channel_server(ch, mcdir):
+    """Write this channel's server into servers.dat, retiring its previous addresses."""
+    return nbt.upsert_server(mcdir / "servers.dat", ch["server"]["name"],
+                             server_address(ch),
+                             previous=ch["server"].get("previousAddresses") or ())
+
+
 # --------------------------------------------------------------------------- cache
 
 
@@ -507,6 +532,47 @@ def apply_overrides(channel, mcdir, lock, force=False):
 # ---------------------------------------------------------------------------- main
 
 
+def _setup_tailscale(opts, m, prereq, log):
+    """Install Tailscale, sign in, and wait until the shared server answers."""
+    log()
+    log("Setting up Tailscale...")
+    if not prereq.install_tailscale(log):
+        raise RuntimeError(
+            "Tailscale was not installed. Install it from https://tailscale.com/download "
+            "and run GreenCraft again."
+        )
+    if not prereq.tailscale_up(log):
+        raise RuntimeError("Tailscale sign-in did not complete. Run GreenCraft again to retry.")
+
+    # Being signed in to Tailscale and having access to the server are different things.
+    # A friend who runs setup before clicking their invite link is signed in fine and
+    # will never reach the server -- so this wait is bounded, and failing here says
+    # "accept the invite", not "sign-in failed". Conflating the two sends people to
+    # re-do the one part that already worked.
+    invite = opts.get("invite")
+    prereq.open_invite(invite, log)
+    srv = m["channels"]["stable"]["server"]
+    if not prereq.wait_for_server(srv["address"], int(srv["port"]), log, timeout=90):
+        if invite:
+            log("  still no access - reopening your invite link...")
+            prereq.open_invite(invite, log)
+            if prereq.wait_for_server(srv["address"], int(srv["port"]), log, timeout=120):
+                log("  reachable")
+            else:
+                raise RuntimeError(
+                    "You are signed in to Tailscale, but this account cannot reach the "
+                    "GreenCraft server yet. Accept the shared machine using the invite "
+                    "link that just opened, then run GreenCraft again."
+                )
+        else:
+            raise RuntimeError(
+                "You are signed in to Tailscale, but this account cannot reach the "
+                "GreenCraft server. You probably have not accepted the invite yet - "
+                "open the invite link you were sent, accept the shared machine, then "
+                "run GreenCraft again."
+            )
+
+
 def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
     """First-run setup, driven by the GUI. Runs on a worker thread; log() is the only
     way it may talk to the user."""
@@ -544,43 +610,18 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
     m = load_manifest(manifest_src)
     prereqs = m.get("prerequisites", {})
 
-    log()
-    log("Setting up Tailscale...")
-    if not prereq.install_tailscale(log):
-        raise RuntimeError(
-            "Tailscale was not installed. Install it from https://tailscale.com/download "
-            "and run GreenCraft again."
-        )
-    if not prereq.tailscale_up(log):
-        raise RuntimeError("Tailscale sign-in did not complete. Run GreenCraft again to retry.")
-
-    # Being signed in to Tailscale and having access to wheatley are different things.
-    # A friend who runs setup before clicking their invite link is signed in fine and
-    # will never reach the server -- so this wait is bounded, and failing here says
-    # "accept the invite", not "sign-in failed". Conflating the two sends people to
-    # re-do the one part that already worked.
-    invite = opts.get("invite")
-    prereq.open_invite(invite, log)
-    srv = m["channels"]["stable"]["server"]
-    if not prereq.wait_for_server(srv["address"], int(srv["port"]), log, timeout=90):
-        if invite:
-            log("  still no access - reopening your invite link...")
-            prereq.open_invite(invite, log)
-            if prereq.wait_for_server(srv["address"], int(srv["port"]), log, timeout=120):
-                log("  reachable")
-            else:
-                raise RuntimeError(
-                    "You are signed in to Tailscale, but this account cannot reach the "
-                    "GreenCraft server yet. Accept the shared machine using the invite "
-                    "link that just opened, then run GreenCraft again."
-                )
-        else:
-            raise RuntimeError(
-                "You are signed in to Tailscale, but this account cannot reach the "
-                "GreenCraft server. You probably have not accepted the invite yet - "
-                "open the invite link you were sent, accept the shared machine, then "
-                "run GreenCraft again."
-            )
+    if needs_tailscale(m):
+        _setup_tailscale(opts, m, prereq, log)
+    else:
+        # A public server needs nothing installed to reach it. Check it answers, but
+        # only warn: the server being off for the night is no reason to fail setup,
+        # and the game will say plainly if it cannot connect.
+        srv = m["channels"]["stable"]["server"]
+        log()
+        log("Checking the server...")
+        if not prereq.wait_for_server(srv["address"], int(srv["port"]), log, timeout=20):
+            log("  The server did not answer. It may just be offline right now; setup")
+            log("  carries on, and Minecraft will connect once it is back up.")
 
     log()
     log("Setting up Prism Launcher...")
@@ -616,10 +657,7 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
         w, _p = apply_overrides(ch, mcdir, lock)
         if w:
             log(f"  {w} settings files written")
-        addr = ch["server"]["address"]
-        if ch["server"].get("port") and int(ch["server"]["port"]) != 25565:
-            addr = f"{addr}:{ch['server']['port']}"
-        nbt.upsert_server(mcdir / "servers.dat", ch["server"]["name"], addr)
+        upsert_channel_server(ch, mcdir)
         log(f"  added '{ch['server']['name']}' to the server list")
 
     log()
@@ -707,10 +745,9 @@ def _sync_and_prepare(args, log):
     lock = load_lock(mcdir)
     apply_overrides(ch, mcdir, lock)
 
-    addr = ch["server"]["address"]
-    if ch["server"].get("port") and int(ch["server"]["port"]) != 25565:
-        addr = f"{addr}:{ch['server']['port']}"
-    nbt.upsert_server(mcdir / "servers.dat", ch["server"]["name"], addr)
+    what = upsert_channel_server(ch, mcdir)
+    if what != "unchanged":
+        log(f"Server list: {what}")
 
     prism = args.prism or find_prism()
     if not prism:
@@ -759,8 +796,17 @@ def run_setup_gui():
             log(msg)
         return do_install(opts, tee)
 
+    # The options screen asks for an invite link only while the server is on Tailscale.
+    # A quick look at the manifest decides; if it cannot be fetched, show the field, as
+    # every launcher before this one did. do_install() fetches it again and acts on that.
+    try:
+        show_tailscale = needs_tailscale(json.loads(fetch(DEFAULT_MANIFEST, timeout=5)))
+    except Exception:
+        show_tailscale = True
+
     win = gui.SetupWindow(
         _work,
+        show_tailscale=show_tailscale,
         uninstall_work=lambda opts, log: inst.uninstall_selected(opts, log),
         world_count=inst.world_count(state),
         installed=inst.is_installed(),
@@ -963,12 +1009,8 @@ def main():
         else:
             log("Overrides: already at this version")
 
-        sd = mcdir / "servers.dat"
-        addr = ch["server"]["address"]
-        if ch["server"].get("port") and int(ch["server"]["port"]) != 25565:
-            addr = f"{addr}:{ch['server']['port']}"
-        what = nbt.upsert_server(sd, ch["server"]["name"], addr)
-        log(f"Server list: {what} '{ch['server']['name']}' -> {addr}")
+        what = upsert_channel_server(ch, mcdir)
+        log(f"Server list: {what} '{ch['server']['name']}' -> {server_address(ch)}")
 
     if args.dry_run or args.no_launch:
         log("\nDone (not launching).")
