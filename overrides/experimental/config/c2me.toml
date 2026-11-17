@@ -21,7 +21,7 @@ defaultGlobalExecutorParallelismExpression = "default"
 # (Default: 9) Configures the parallelism of global executor
 globalExecutorParallelism = "default"
 # ================================================================
-# (Default: LOW) Sets the thread priority preset for worker threads
+# (Default: LOWER) Sets the thread priority preset for worker threads
 # 
 # Available presets:
 # - UNSET: do not touch any thread priority settings, restores legacy behavior
@@ -31,26 +31,37 @@ globalExecutorParallelism = "default"
 #   MacOS: priority=30
 #   FreeBSD: priority=12
 # - LOW:
-#   Linux: SCHED_BATCH, nice=3
-#   Windows: Below Normal priority, enable power throttling
+#   Linux: SCHED_BATCH, nice=2
+#   Windows: Lowest priority
 #   MacOS: priority=28
 #   FreeBSD: priority=6
 # - LOWER
-#   Linux: SCHED_BATCH, nice=8
+#   Linux: SCHED_BATCH, nice=5, prefers efficiency cores if available
 #   Windows: Lowest priority, enable power throttling
 #   MacOS: priority=23
 #   FreeBSD: priority=3
 # - LOWEST
-#   Linux: SCHED_BATCH, nice=16
+#   Linux: SCHED_BATCH, nice=12, prefers efficiency cores if available
 #   Windows: Idle priority, enable power throttling
 #   MacOS: priority=15
 #   FreeBSD: priority=0
 # 
-# Defaults to LOW on clients and BELOW_NORMAL for dedicated servers
+# "prefer efficiency cores" on Linux requires Linux 5.3+ on x86, x86_64, arm, arm64
+# "enable power throttling" on Windows requires Windows 8 or newer, ideally Windows 11 or newer
+# 
+# Defaults to LOWER on clients and BELOW_NORMAL for dedicated servers
 # 
 # Please preserve quotes so the config don't break
 # 
 threadPoolPriorityPreset = "default"
+# ================================================================
+# (Default: true) Whether to attempt to apply boosting for the render thread on the client
+# 
+# Currently works on:
+# - Linux 5.3+ on x86, x86_64, arm, arm64
+# - Windows 8 or newer
+# 
+applyBoostingForRenderThread = "default"
 
 [fixes]
 	# ================================================================
@@ -146,32 +157,6 @@ threadPoolPriorityPreset = "default"
 	# (Default: true) Whether to enable aquifer optimizations to accelerate overworld worldgen
 	# (may cause incompatibility with other mods)
 	optimizeAquifer = "default"
-	# ================================================================
-	# (Default: true) Whether to use density function compiler to accelerate world generation
-	# 
-	# Density function: https://minecraft.wiki/w/Density_function
-	# 
-	# This functionality compiles density functions from world generation
-	# datapacks (including vanilla generation) to JVM bytecode to increase
-	# performance by allowing JVM JIT to better optimize the code
-	# 
-	# Currently, all functions provided by vanilla are implemented.
-	# Chunk upgrades from pre-1.18 versions are not implemented and will
-	# fall back to the unoptimized version of density functions.
-	# 
-	useDensityFunctionCompiler = "default"
-	# ================================================================
-	# (Default: true) Enables the built-in integrations with other worldgen mods in density function compiler.
-	# 
-	# Depends on vanillaWorldGenOptimizations.useDensityFunctionCompiler
-	# 
-	enableBuiltinDFCIntegrations = "default"
-	# ================================================================
-	# (Default: true) Whether to enable End Biome Cache to accelerate The End worldgen 
-	# This is no longer included in lithium-fabric 
-	# (may cause incompatibility with other mods)
-	# 
-	useEndBiomeCache = "default"
 
 	[vanillaWorldGenOptimizations.nativeAcceleration]
 		# ================================================================
@@ -282,6 +267,13 @@ threadPoolPriorityPreset = "default"
 	# 
 	suppressGhostMushrooms = "default"
 	# ================================================================
+	# (Default: false) Whether to attempt to propagate chunk system errors as crashes
+	# 
+	# Not all errors can be detected and not all detected errors can be propagated,
+	# but this should cover most of them.
+	# 
+	crashEagerlyOnError = "default"
+	# ================================================================
 	# (Default: true) Whether to allow POIs (Point of Interest) to be unloaded
 	# Unloaded POIs are reloaded on-demand or when the corresponding chunks are loaded again,
 	# which should not cause any behavior change
@@ -292,91 +284,4 @@ threadPoolPriorityPreset = "default"
 	# in a single world instance
 	# 
 	allowPOIUnloading = "default"
-
-[openclAccel]
-	# ================================================================
-	# (Default: true) Whether to prefer fast compilation with noinline hints
-	# 
-	preferFastCompilation = "default"
-	# ================================================================
-	# (Default: false) Enables fast compilation options for intel GPUs
-	# 
-	enableIntelFastCompilation = "default"
-	# ================================================================
-	# (Default: false) Overrides the built-in blocklist and enables acceleration on unsupported configurations
-	# 
-	disableBuiltinDeviceBlocklist = "default"
-	# ================================================================
-	# (Default: true) Enable OpenCL acceleration for world generation.
-	# 
-	enabled = "default"
-	# ================================================================
-	# (Default: 32) Maximum number of concurrent tasks per device
-	# Increasing this may increase the performance and will increase the VRAM usage
-	# 
-	maxConcurrentTasksPerDevice = "default"
-	# ================================================================
-	# (Default: true) Enables fast compilation options for nvidia GPUs
-	# 
-	# This *will* decrease GPU-bound throughput by roughly 20%
-	# 
-	enableNvidiaFastCompilation = "default"
-	# ================================================================
-	# (Default: false) Whether to use smaller batches in worldgen
-	# 
-	# Smaller batches helps older iGPUs to avoid tripping GPU timeouts,
-	# but it *will* reduce scheduling efficiency for modern GPUs
-	# 
-	useSmallerBatches = "default"
-	# ================================================================
-	# (Default: true) Uses old compiler behavior of preserving all control flows in the generated OpenCL code.
-	# This will increase memory pressure and time used when compiling, but will usually produce faster code.
-	# 
-	preserveAllControlFlows = "default"
-	# ================================================================
-	# (Default: true) Whether to attempt to lower the priority of the command queues
-	# This may reduce the fps drop caused by the OpenCL acceleration
-	# 
-	# Requires cl_khr_priority_hints and cl_khr_throttle_hints
-	# 
-	lowPriorityQueues = "default"
-	# ================================================================
-	# (Default: true) Whether to allow the usage of Accelerator OpenCL devices
-	# 
-	allowAcceleratorDevices = "default"
-	# ================================================================
-	# (Default: false) Whether to allow falling back to non-OpenCL world generation if OpenCL initialization fails
-	# 
-	allowIncompatibilityFallback = "default"
-	# ================================================================
-	# (Default: true) Whether to use the default device prioritization strategy
-	# 
-	# Currently does nothing because most outstanding issues have been resolved.
-	# 
-	useDevicePrioritization = "default"
-	# ================================================================
-	# (Default: true) Whether to allow the usage of GPU OpenCL devices
-	# 
-	allowGPUDevices = "default"
-	# ================================================================
-	# (Default: ) A comma-separated list of device UUIDs to whitelist
-	# If non-empty, only the devices in this list will be used
-	# You can find the UUIDs in the log when the OpenCL devices are enumerated
-	# Example: "951e5ce5-ccec-4a37-9ece-d0a800662d8f,3e825b77-fa62-403e-9155-aed1c014b2a2"
-	# 
-	deviceUUIDWhitelist = "default"
-	# ================================================================
-	# (Default: false) Whether to allow the usage of CPU OpenCL devices
-	# 
-	allowCPUDevices = "default"
-	# ================================================================
-	# (Default: false) Whether to perform explicit flushes after every batch
-	# 
-	doExplicitFlushes = "default"
-	# ================================================================
-	# (Default: ) A comma-separated list of device UUIDs to blacklist
-	# You can find the UUIDs in the log when the OpenCL devices are enumerated
-	# Example: "951e5ce5-ccec-4a37-9ece-d0a800662d8f,3e825b77-fa62-403e-9155-aed1c014b2a2"
-	# 
-	deviceUUIDBlacklist = "default"
 
