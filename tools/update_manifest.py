@@ -257,6 +257,9 @@ def main():
             srv = "required" if e["file"] in server_files else "unsupported"
         elif e["path"] in prev_files:
             srv = prev_files[e["path"]]["env"]["server"]
+        elif prev_by_project.get(modrinth_project(url)):
+            # Renamed by a version bump; the same project keeps its server-side role.
+            srv = prev_by_project[modrinth_project(url)]["env"]["server"]
         else:
             srv = "unsupported"
 

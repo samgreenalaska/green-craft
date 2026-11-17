@@ -28,7 +28,24 @@ DEFAULT_INSTANCE = "tectonic"
 EXCLUDE_NAMES = {"sodium-fingerprint.json", "xaeropatreon.txt"}
 
 SEEDED_DIRS = ["config"]
-SEEDED_FILES = ["options.txt", "shaderpacks/photon_v1.3b.zip.txt"]
+# The active shader pack's settings file is added by seeded_files(): Iris names it after the
+# pack (photon_v1.3b.zip.txt, photon_v1.4.zip.txt), so a fixed name silently stops seeding
+# anything the day the pack is upgraded.
+SEEDED_FILES = ["options.txt"]
+
+
+def seeded_files(inst):
+    """SEEDED_FILES plus the settings file of the shader pack iris.properties selects."""
+    files = list(SEEDED_FILES)
+    try:
+        for line in (Path(inst) / "config" / "iris.properties").read_text(encoding="utf-8").splitlines():
+            if line.startswith("shaderPack="):
+                pack = line.split("=", 1)[1].strip()
+                if pack:
+                    files.append(f"shaderpacks/{pack}.txt")
+    except OSError:
+        pass
+    return files
 
 
 def instance_dir(name):
@@ -60,7 +77,7 @@ def collect(inst, dest):
             out.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, out)
 
-    for rel in SEEDED_FILES:
+    for rel in seeded_files(inst):
         src = Path(inst) / rel
         if src.exists():
             out = dest / rel
