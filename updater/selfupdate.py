@@ -56,7 +56,7 @@ def available(manifest, channel):
     return v, payload
 
 
-def stage(spec, cached, log):
+def stage(spec, cached, log, on_bytes=None):
     """Unpack the new payload next to the current one. Returns the staging path."""
     d = app_dir()
     if not d:
@@ -64,7 +64,7 @@ def stage(spec, cached, log):
         return None
 
     src, _ = cached(spec["hashes"]["sha512"], spec.get("filename", "GreenCraft.zip"),
-                    spec["downloads"], spec.get("fileSize"))
+                    spec["downloads"], spec.get("fileSize"), on_bytes=on_bytes)
 
     staging = d.with_name(d.name + ".new")
     if staging.exists():
@@ -114,29 +114,38 @@ def swap_and_relaunch(staging, argv, log):
     with os.fdopen(fd, "w", encoding="ascii", errors="replace") as f:
         f.write(script)
 
-    DETACHED_PROCESS = 0x00000008
-    CREATE_NEW_PROCESS_GROUP = 0x00000200
-    CREATE_NO_WINDOW = 0x08000000
     subprocess.Popen(
         ["cmd", "/c", path],
         close_fds=True,
-        creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        **procenv.hidden_detached(),
         env=procenv.child_env(),
         cwd=os.environ.get("SystemRoot", "C:\\"),
     )
     log("  restarting to finish the update")
 
 
-def check_and_apply(manifest, channel, cached, log, argv):
-    """Returns True if an update was staged and this process should exit now."""
+def check_and_apply(manifest, channel, cached, log, argv, steps=None, upto=None):
+    """Returns True if an update was staged and this process should exit now.
+
+    With `steps`, the download shows on the progress bar as its own step ending at
+    `upto` percent.
+    """
     try:
         newer, spec = available(manifest, channel)
         if not newer:
             return False
         log(f"Updating GreenCraft {_version.VERSION} -> {newer}...")
-        staging = stage(spec, cached, log)
+        on_bytes = None
+        if steps is not None:
+            steps.step(f"Updating GreenCraft to v{newer}...", upto or 100)
+            on_bytes = steps.bytes_cb(0.0, 0.9)
+        staging = stage(spec, cached, log, on_bytes=on_bytes)
         if not staging:
             return False
+        if steps is not None:
+            steps.part(1, 1)
+            steps.label("Restarting GreenCraft to finish the update...")
         swap_and_relaunch(staging, argv, log)
         return True
     except Exception as e:

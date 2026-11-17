@@ -180,15 +180,17 @@ def delete_source_later(src, log=print):
     for our PID to disappear first.
     """
     src = Path(src)
-    DETACHED_PROCESS = 0x00000008
     cmd = (
         f'ping 127.0.0.1 -n 3 >nul & '
         f'del /f /q "{src}" >nul 2>&1'
     )
     try:
         import procenv
+        # hidden_detached, not DETACHED_PROCESS: see procenv for why the latter made
+        # ping open a visible console window.
         subprocess.Popen(["cmd", "/c", cmd], close_fds=True,
-                         creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, **procenv.hidden_detached(),
                          env=procenv.child_env(), cwd=os.environ.get("SystemRoot", "C:\\"))
         log(f"  the downloaded copy in {src.parent.name} will be removed")
         return True

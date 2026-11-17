@@ -100,22 +100,30 @@ def minecraft_windows():
     return found
 
 
-def running(names):
-    """True if any process whose image name is in `names` (lower case) is running."""
+def pids(names):
+    """PIDs of processes whose image name is in `names` (lower case), or None if the
+    process list could not be read."""
     snap = _kernel32.CreateToolhelp32Snapshot(_TH32CS_SNAPPROCESS, 0)
     if not snap or snap == _INVALID_HANDLE:
-        return True  # can't tell, so don't conclude it has gone
+        return None
     try:
+        found = set()
         e = _PROCESSENTRY32W()
         e.dwSize = ctypes.sizeof(e)
         ok = _kernel32.Process32FirstW(snap, ctypes.byref(e))
         while ok:
             if e.szExeFile.lower() in names:
-                return True
+                found.add(e.th32ProcessID)
             ok = _kernel32.Process32NextW(snap, ctypes.byref(e))
-        return False
+        return found
     finally:
         _kernel32.CloseHandle(snap)
+
+
+def running(names):
+    """True if any process whose image name is in `names` (lower case) is running."""
+    found = pids(names)
+    return True if found is None else bool(found)  # can't tell: don't say it has gone
 
 
 class LaunchWatch:
@@ -131,8 +139,11 @@ class LaunchWatch:
       "timeout"  gave up; Minecraft may still be on its way
     """
 
-    def __init__(self, before, timeout=900.0, grace=20.0, clock=time.monotonic):
+    def __init__(self, before, timeout=900.0, grace=20.0, clock=time.monotonic,
+                 java_before=()):
         self.before = set(before)
+        self.java_before = set(java_before or ())
+        self._game = False
         self.timeout = timeout
         self.grace = grace
         self.clock = clock
@@ -141,6 +152,14 @@ class LaunchWatch:
 
     def elapsed(self):
         return self.clock() - self.start
+
+    def game_started(self):
+        """True once a new JVM exists: Prism has finished preparing (and, on a first
+        launch, downloading) Minecraft and handed over to the game itself."""
+        if not self._game:
+            now = pids(JAVA)
+            self._game = bool(now and (now - self.java_before))
+        return self._game
 
     def poll(self):
         if minecraft_windows() - self.before:

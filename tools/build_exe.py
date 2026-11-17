@@ -70,6 +70,7 @@ def build_app():
         "--hidden-import", "version",
         "--hidden-import", "procenv",
         "--hidden-import", "gamewatch",
+        "--hidden-import", "progress",
         # Both channel icons ship beside the exe: greencraft.py copies the right one
         # into Prism's icons directory and points the instance's iconKey at it.
         "--add-data", f"{UPDATER / 'icon.ico'};.",

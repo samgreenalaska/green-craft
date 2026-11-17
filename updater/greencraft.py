@@ -116,12 +116,27 @@ def host_of(url):
     return (urlparse(url).hostname or "").lower()
 
 
-def fetch(url, timeout=60):
+def fetch(url, timeout=60, on_bytes=None):
+    """GET over HTTPS. `on_bytes(received, total)` is called as data arrives; total is
+    0 when the server sends no Content-Length."""
     if url.split(":", 1)[0] != "https":
         raise ValueError(f"refusing non-HTTPS URL: {url}")
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read()
+        if on_bytes is None:
+            return r.read()
+        try:
+            total = int(r.headers.get("Content-Length") or 0)
+        except ValueError:
+            total = 0
+        buf = bytearray()
+        while True:
+            chunk = r.read(1 << 16)
+            if not chunk:
+                break
+            buf += chunk
+            on_bytes(len(buf), total)
+        return bytes(buf)
 
 
 def load_manifest(src):
@@ -158,8 +173,11 @@ def upsert_channel_server(ch, mcdir):
 # --------------------------------------------------------------------------- cache
 
 
-def cached(sha512, filename, urls, size=None):
+def cached(sha512, filename, urls, size=None, on_bytes=None):
     """Return a path to a verified copy, downloading into the cache if needed."""
+    if on_bytes is not None and size:
+        _cb = on_bytes
+        on_bytes = lambda got, total: _cb(got, total or size)
     slot = CACHE / sha512[:2] / sha512[2:16]
     slot.mkdir(parents=True, exist_ok=True)
     dest = slot / filename
@@ -174,7 +192,7 @@ def cached(sha512, filename, urls, size=None):
             last = f"host not allowed: {h}"
             continue
         try:
-            data = fetch(url, timeout=300)
+            data = fetch(url, timeout=300, on_bytes=on_bytes)
         except Exception as e:
             last = f"{type(e).__name__}: {e}"
             continue
@@ -446,14 +464,18 @@ def excluded_here(channel, platform_name):
     ]
 
 
-def sync(channel, mcdir, dry_run=False):
+def sync(channel, mcdir, dry_run=False, steps=None):
+    import progress
+    steps = steps or progress.NULL
     lock = load_lock(mcdir)
     owned = lock["files"]
     wanted = wanted_files(channel)
+    n = len(wanted) or 1
 
     added, updated, kept, skipped, removed = [], [], [], [], []
 
-    for path, f in sorted(wanted.items()):
+    for i, (path, f) in enumerate(sorted(wanted.items())):
+        steps.part(i, n)
         dst = mcdir / path
         want = f["hashes"]["sha512"]
 
@@ -473,7 +495,10 @@ def sync(channel, mcdir, dry_run=False):
             (updated if dst.exists() else added).append(path)
             continue
 
-        src, downloaded = cached(want, Path(path).name, f["downloads"], f.get("fileSize"))
+        steps.label(f"Downloading {Path(path).name}")
+        src, downloaded = cached(want, Path(path).name, f["downloads"], f.get("fileSize"),
+                                 on_bytes=steps.bytes_cb(i / n, (i + 1) / n))
+        steps.label()
         link_or_copy(src, dst)
         (updated if path in owned else added).append(path)
         owned[path] = want
@@ -498,10 +523,11 @@ def sync(channel, mcdir, dry_run=False):
         lock["channel"] = channel.get("prismInstanceId")
         save_lock(mcdir, lock)
 
+    steps.part(1, 1)
     return added, updated, kept, skipped, removed
 
 
-def apply_overrides(channel, mcdir, lock, force=False):
+def apply_overrides(channel, mcdir, lock, force=False, on_bytes=None):
     """Unpack the seeded bundle. First install only -- existing files are never
     overwritten, so tuned Sodium/Xaero settings survive every later update."""
     ov = channel.get("overrides")
@@ -510,7 +536,8 @@ def apply_overrides(channel, mcdir, lock, force=False):
     if lock.get("overridesVersion") == channel["versionId"] and not force:
         return 0, 0
 
-    src, _ = cached(ov["hashes"]["sha512"], ov["filename"], ov["downloads"], ov.get("fileSize"))
+    src, _ = cached(ov["hashes"]["sha512"], ov["filename"], ov["downloads"], ov.get("fileSize"),
+                    on_bytes=on_bytes)
     written = preserved = 0
     with zipfile.ZipFile(src) as z:
         for name in z.namelist():
@@ -573,11 +600,13 @@ def _setup_tailscale(opts, m, prereq, log):
             )
 
 
-def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
-    """First-run setup, driven by the GUI. Runs on a worker thread; log() is the only
-    way it may talk to the user."""
+def do_install(opts, log, manifest_src=DEFAULT_MANIFEST, steps=None):
+    """First-run setup, driven by the GUI. Runs on a worker thread; log() and steps
+    are the only ways it may talk to the user."""
     import install as inst
     import prereq
+    import progress
+    steps = steps or progress.NULL
 
     # ARM64 Windows cannot run this pack. Measured on a Snapdragon X / Adreno X1-85,
     # 2026-08-10. Startup is NOT the problem -- the game reaches the title screen and
@@ -606,17 +635,20 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
         log("them. The minimap and everything else work normally.")
         log()
 
+    steps.step("Fetching the mod list...", 4)
     log("Fetching the mod list...")
     m = load_manifest(manifest_src)
     prereqs = m.get("prerequisites", {})
 
     if needs_tailscale(m):
+        steps.step("Setting up Tailscale...", 18)
         _setup_tailscale(opts, m, prereq, log)
     else:
         # A public server needs nothing installed to reach it. Check it answers, but
         # only warn: the server being off for the night is no reason to fail setup,
         # and the game will say plainly if it cannot connect.
         srv = m["channels"]["stable"]["server"]
+        steps.step("Checking the server...", 8)
         log()
         log("Checking the server...")
         if not prereq.wait_for_server(srv["address"], int(srv["port"]), log, timeout=20):
@@ -627,9 +659,12 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
     log("Setting up Prism Launcher...")
     prism = find_prism()
     if prism:
+        steps.step("Checking Prism Launcher...", 30)
         log(f"  already installed: {prism}")
     else:
-        prereq.install_prism(prereqs.get("prism", {}), cached, log)
+        steps.step("Installing Prism Launcher...", 30)
+        prereq.install_prism(prereqs.get("prism", {}), cached, log,
+                             on_bytes=steps.bytes_cb(0.0, 0.8))
         prism = find_prism()
         if not prism:
             raise RuntimeError(
@@ -641,7 +676,8 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
 
     channels = ["stable"] + (["experimental"] if opts.get("experimental") else [])
     instances = []
-    for name in channels:
+    per = 60 / len(channels)
+    for n, name in enumerate(channels):
         ch = m["channels"][name]
         inst_id = ch["prismInstanceId"]
         instances.append(inst_id)
@@ -649,12 +685,15 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
         mcdir = root / "minecraft"
         log()
         log(f"Setting up the {name} channel...")
+        what = "mods" if name == "stable" else f"{name} mods"
+        steps.step(f"Installing {what}...", 30 + per * n + per * 0.85)
         ensure_instance(root, inst_id, ch["pack"]["dependencies"], ch.get("javaArgs"))
         ensure_instance_icon(root, name)
-        added, updated, kept, skipped, removed = sync(ch, mcdir, False)
+        added, updated, kept, skipped, removed = sync(ch, mcdir, False, steps=steps)
         log(f"  {len(added) + len(updated)} files installed, {len(kept)} already present")
+        steps.step("Installing settings and shaders...", 30 + per * (n + 1))
         lock = load_lock(mcdir)
-        w, _p = apply_overrides(ch, mcdir, lock)
+        w, _p = apply_overrides(ch, mcdir, lock, on_bytes=steps.bytes_cb(0.0, 0.9))
         if w:
             log(f"  {w} settings files written")
         upsert_channel_server(ch, mcdir)
@@ -664,6 +703,7 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
     # GreenCraftSetup already unpacked us into the program folder, so there is
     # nothing to relocate -- shortcuts point straight at where we are running from.
     exe_here = inst.exe_path()
+    steps.step("Creating shortcuts...", 96)
     log("Creating shortcuts...")
     # No icon= here on purpose: create_shortcuts gives each channel its own, so the
     # experimental shortcut shows the dog rather than the stable cat.
@@ -676,6 +716,7 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
         where = "program folder" if str(inst.INSTALL_DIR) in p else "desktop / start menu"
         log(f"  {Path(p).name}  ({where})")
 
+    steps.step("Finishing up...", 100)
     log("Registering with Apps & Features...")
     size_kb = 0
     for i in instances:
@@ -714,40 +755,64 @@ def do_install(opts, log, manifest_src=DEFAULT_MANIFEST):
     return {"instances": instances}
 
 
-def _sync_and_prepare(args, log):
+# Where each routine-path step ends on the progress bar, in percent. The rest, from
+# LAUNCH_FROM to 100, belongs to starting Prism and Minecraft (see gui.ProgressWindow).
+# Mods get the biggest share because an update downloads them; a launcher update gets
+# its own share only when there is one, and then restarts before reaching the rest.
+P_CHECK, P_SELF, P_MODS, P_SETTINGS = 6, 90, 70, 78
+LAUNCH_FROM = P_SETTINGS
+RESTARTING = "restarting"
+
+
+def _sync_and_prepare(args, log, steps=None, self_update=False):
     """Everything the routine path does except actually starting Prism.
 
-    Returns (prism_path_or_None, instance_id). Raising is how failure is reported --
-    the progress window catches it and shows the log.
+    Returns (prism_path_or_None, instance_id), or RESTARTING when a launcher update
+    was staged and this process must exit for it to be swapped in. Raising is how
+    failure is reported -- the progress window catches it and shows the log.
     """
+    import progress
+    import selfupdate
+    steps = steps or progress.NULL
+
+    steps.step("Checking for updates...", P_CHECK)
     m = load_manifest(args.manifest)
     if args.channel not in m.get("channels", {}):
         raise RuntimeError(f"no such channel '{args.channel}' in the manifest")
     ch = m["channels"][args.channel]
+
+    # The launcher update runs here, inside the window, rather than before it opens:
+    # out there it ran with nothing on screen at all.
+    if self_update and selfupdate.check_and_apply(m, args.channel, cached, log,
+                                                  sys.argv[1:], steps=steps, upto=P_SELF):
+        return RESTARTING
 
     inst_id = args.instance or ch["prismInstanceId"]
     root = Path(args.instances_dir) if args.instances_dir else PRISM_INSTANCES
     mcdir = root / inst_id / "minecraft"
 
     log(f"Channel {args.channel}, version {ch['versionId']}")
+    steps.step("Updating mods...", P_MODS)
     ensure_instance(root / inst_id, ch["prismInstanceId"],
                     ch["pack"]["dependencies"], ch.get("javaArgs"))
     ensure_instance_icon(root / inst_id, args.channel)
 
     log("Checking mods...")
-    added, updated, kept, skipped, removed = sync(ch, mcdir, False)
+    added, updated, kept, skipped, removed = sync(ch, mcdir, False, steps=steps)
     changed = len(added) + len(updated) + len(removed)
     log(f"{changed} change(s), {len(kept)} already up to date"
         if changed else "Everything is up to date")
     for p in skipped:
         log(f"left alone (edited locally): {p}")
 
+    steps.step("Updating settings and the server list...", P_SETTINGS)
     lock = load_lock(mcdir)
-    apply_overrides(ch, mcdir, lock)
+    apply_overrides(ch, mcdir, lock, on_bytes=steps.bytes_cb(0.0, 0.9))
 
     what = upsert_channel_server(ch, mcdir)
     if what != "unchanged":
         log(f"Server list: {what}")
+    steps.part(1, 1)
 
     prism = args.prism or find_prism()
     if not prism:
@@ -787,14 +852,14 @@ def run_setup_gui():
 
     state = inst.load_state()
 
-    def _work(opts, window_log):
+    def _work(opts, window_log, steps):
         # Tee to the log file. Without this the setup wizard wrote nothing at all
         # while it ran, so a user stuck partway had no log to send and support had
         # nothing to look at -- exactly the situation the Tailscale hang created.
         def tee(msg=""):
             window_log(msg)
             log(msg)
-        return do_install(opts, tee)
+        return do_install(opts, tee, steps=steps)
 
     # The options screen asks for an invite link only while the server is on Tailscale.
     # A quick look at the manifest decides; if it cannot be fetched, show the field, as
@@ -872,10 +937,17 @@ def main():
     # Tidy up the previous build left behind by an update, before anything else.
     selfupdate.cleanup_old(log)
 
+    bare = len(sys.argv) == 1
+    # The routine path from a shortcut, which shows the progress window.
+    windowed = not (args.setup or args.install or args.uninstall or args.dry_run
+                    or args.no_gui or bare)
+
     # Self-update on the routine path, before syncing. Not during setup or uninstall:
     # swapping the exe out from under a wizard mid-run is asking for trouble, and a
     # user trying to remove GreenCraft should not have a new copy installed first.
-    if args.channel and not (args.setup or args.install or args.uninstall or args.dry_run):
+    # The windowed path does it inside the progress window instead (_sync_and_prepare).
+    if not windowed and args.channel and not (
+            args.setup or args.install or args.uninstall or args.dry_run):
         try:
             m = load_manifest(args.manifest)
             if selfupdate.check_and_apply(m, args.channel, cached, log, sys.argv[1:]):
@@ -918,29 +990,30 @@ def main():
     # No arguments means someone ran the exe directly rather than via a shortcut, so
     # they want to set something up or take it away -- not to start the game. Playing
     # is what the shortcuts are for, and they always pass --channel.
-    bare = len(sys.argv) == 1
     if args.setup or bare:
         return run_setup_gui()
 
     # Routine path from a shortcut: show a small progress window rather than nothing,
     # since a windowed build has no console. --no-gui keeps the plain behaviour for
     # scripting and for debugging this program itself.
-    if not args.no_gui and not args.dry_run:
+    if windowed:
         import gui as _gui
 
-        def _work(window_log):
+        def _work(window_log, steps):
             # Tee to the log file as well. With no console, that file is the only
             # record once the window has closed itself.
             def tee(msg=""):
                 window_log(msg)
                 log(msg)
-            return _sync_and_prepare(args, tee)
+            return _sync_and_prepare(args, tee, steps=steps, self_update=True)
 
         def _launch(res):
             # Runs on the GUI thread once the sync succeeds. The window then stays up
             # until Minecraft's own window exists: Prism's dialog closes the moment
             # the JVM starts, about ten seconds before the game shows anything, and
             # that gap looked like the launch had silently failed.
+            if res == RESTARTING:
+                return None  # the updated copy relaunches itself and takes over
             prism, inst_id = res
             if args.no_launch or not prism:
                 return None
@@ -948,13 +1021,15 @@ def main():
             try:
                 import gamewatch
                 before = gamewatch.minecraft_windows()
+                java_before = gamewatch.pids(gamewatch.JAVA) or ()
             except Exception as e:
                 log(f"launch watch unavailable: {type(e).__name__}: {e}")
                 gamewatch = None
             launch_detached(prism, inst_id)
-            return gamewatch.LaunchWatch(before) if gamewatch else None
+            return (gamewatch.LaunchWatch(before, java_before=java_before)
+                    if gamewatch else None)
 
-        win = _gui.ProgressWindow(_work, wait=_launch)
+        win = _gui.ProgressWindow(_work, wait=_launch, launch_from=LAUNCH_FROM)
         _res, failed = win.run()
         if failed or not _res:
             return 1

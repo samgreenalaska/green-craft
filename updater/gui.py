@@ -63,6 +63,34 @@ def _icon_path():
         return src
 
 
+class SmoothBar:
+    """A determinate bar that eases toward its target instead of jumping.
+
+    Steps report in bursts (a hash check per mod is a few milliseconds), and a bar
+    that leaps 40% then sits still reads as stuck. Easing makes it read as moving.
+    It never goes backwards.
+    """
+
+    def __init__(self, parent, pct_label=None):
+        self.bar = ttk.Progressbar(parent, mode="determinate", maximum=100)
+        self.pct = pct_label
+        self.target = 0.0
+        self.shown = 0.0
+
+    def set(self, pct):
+        self.target = max(self.target, min(float(pct), 100.0))
+
+    def tick(self):
+        gap = self.target - self.shown
+        if gap > 0.05:
+            self.shown += max(gap * 0.25, 0.05)
+        else:
+            self.shown = self.target
+        self.bar.configure(value=self.shown)
+        if self.pct is not None:
+            self.pct.configure(text=f"{int(self.shown)}%")
+
+
 def _centre(win, w, h):
     win.update_idletasks()
     x = (win.winfo_screenwidth() - w) // 2
@@ -172,17 +200,28 @@ class SetupWindow:
                   style="Muted.TLabel").pack(anchor="w")
 
     # --------------------------------------------------------------- progress
-    def _build_progress(self):
+    def _build_progress(self, determinate=True):
         for w in self.frame.winfo_children():
             w.destroy()
         f = self.frame
         ttk.Label(f, text="Setting up", style="Title.TLabel").pack(anchor="w")
-        self.status = ttk.Label(f, text="Starting...", style="Muted.TLabel")
-        self.status.pack(anchor="w", pady=(2, 12))
+        line = ttk.Frame(f)
+        line.pack(fill="x", pady=(2, 12))
+        self.status = ttk.Label(line, text="Starting...", style="Muted.TLabel")
+        self.status.pack(side="left")
 
-        self.bar = ttk.Progressbar(f, mode="indeterminate")
+        # Determinate for setup, which reports named steps; uninstall does not, so it
+        # keeps the bouncing bar rather than one that sits at 0%.
+        if determinate:
+            pct = ttk.Label(line, text="0%", style="Muted.TLabel")
+            pct.pack(side="right")
+            self.smooth = SmoothBar(f, pct)
+            self.bar = self.smooth.bar
+        else:
+            self.smooth = None
+            self.bar = ttk.Progressbar(f, mode="indeterminate")
+            self.bar.start(12)
         self.bar.pack(fill="x")
-        self.bar.start(12)
 
         box = tk.Text(f, height=12, bg="#151922", fg=MUTED, relief="flat",
                       font=("Consolas", 9), wrap="word", insertbackground=FG)
@@ -242,10 +281,13 @@ class SetupWindow:
         self.root.after(80, self._drain)
 
     def _run(self, opts):
+        import progress
+
         def log(msg=""):
             self.q.put(("log", str(msg)))
+        steps = progress.Steps(lambda label, pct: self.q.put(("step", (label, pct))))
         try:
-            self.result = self.work(opts, log)
+            self.result = self.work(opts, log, steps)
             self.q.put(("done", None))
         except Exception as e:
             self.q.put(("log", ""))
@@ -259,11 +301,16 @@ class SetupWindow:
                 if kind == "log":
                     self._append(payload)
                     self._note_link(payload)
-                    if payload.strip():
-                        self.status.configure(text=payload.strip()[:70])
+                elif kind == "step":
+                    label, pct = payload
+                    if label:
+                        self.status.configure(text=label[:70])
+                    if pct is not None:
+                        self.smooth.set(pct)
                 elif kind == "done":
-                    self.bar.stop()
-                    self.bar.configure(mode="determinate", value=100)
+                    self.smooth.set(100)
+                    self.smooth.shown = 100
+                    self.smooth.tick()
                     self.status.configure(text="Starting Minecraft...")
                     # Setup finishes by opening the game and getting out of the way.
                     # A "Play" button here would just be one more thing to click.
@@ -271,14 +318,13 @@ class SetupWindow:
                     self.root.after(900, self.root.destroy)
                     return
                 elif kind == "fail":
-                    self.bar.stop()
-                    self.bar.configure(mode="determinate", value=0)
                     self.status.configure(text="Setup did not finish.")
                     self.done_btn.configure(state="normal")
                     return
         except queue.Empty:
             pass
-        self.root.after(80, self._drain)
+        self.smooth.tick()
+        self.root.after(50, self._drain)
 
     # -------------------------------------------------------------- uninstall
     def _open_uninstall(self):
@@ -359,7 +405,7 @@ class SetupWindow:
         }
         if not any(opts.values()):
             return
-        self._build_progress()
+        self._build_progress(determinate=False)
         self.status.configure(text="Removing...")
 
         def run():
@@ -409,47 +455,65 @@ class ProgressWindow:
     Closes itself when the work succeeds; stays open with the log if it fails, which
     is the only time the detail is worth reading.
 
+    `work(log, steps)` runs on a worker thread and reports named steps through
+    `steps` (progress.Steps), which fill the bar up to `launch_from` percent.
+
     `wait`, if given, is called on the GUI thread with the work's result once it
     succeeds. It starts the game and returns an object whose poll() is None while the
     window should stay up, or a reason string to close it (see gamewatch.LaunchWatch),
-    or returns None itself to close straight away.
+    or returns None itself to close straight away. The rest of the bar belongs to that
+    wait, in two phases: Prism getting ready, then Minecraft loading.
     """
 
-    SLOW_AFTER = 30  # seconds before the "first launch is slow" hint appears
+    # Seconds in the Prism phase before warning that a first launch downloads the game.
+    SLOW_AFTER = 15
+    # Share of the launch part of the bar given to Prism before the game JVM starts.
+    PRISM_SHARE = 0.3
 
-    def __init__(self, work, title="GreenCraft", wait=None):
+    def __init__(self, work, title="GreenCraft", wait=None, launch_from=80):
         self.work = work
         self.wait = wait
+        self.launch_from = launch_from
         self.watch = None
         self.outcome = None
         self.q = queue.Queue()
         self.result = None
         self.failed = False
+        self.phase = None
+        self.phase_start = 0.0
 
         self.root = tk.Tk()
         self.root.title(title)
         _style(self.root)
-        _centre(self.root, 460, 220)
+        _centre(self.root, 460, 230)
         self.root.resizable(False, False)
+        try:
+            self.root.iconbitmap(_icon_path())
+        except Exception:
+            pass
 
         f = ttk.Frame(self.root, padding=20)
         f.pack(fill="both", expand=True)
         self.frame = f
 
         ttk.Label(f, text="GreenCraft", style="Title.TLabel").pack(anchor="w")
-        self.status = ttk.Label(f, text="Checking for updates...", style="Muted.TLabel")
-        self.status.pack(anchor="w", pady=(4, 14))
-        self.bar = ttk.Progressbar(f, mode="indeterminate")
+        line = ttk.Frame(f)
+        line.pack(fill="x", pady=(4, 10))
+        self.status = ttk.Label(line, text="Checking for updates...", style="TLabel")
+        self.status.pack(side="left")
+        self.pct = ttk.Label(line, text="0%", style="Muted.TLabel")
+        self.pct.pack(side="right")
+        self.smooth = SmoothBar(f, self.pct)
+        self.bar = self.smooth.bar
         self.bar.pack(fill="x")
-        self.bar.start(12)
-        self.detail = ttk.Label(f, text="", style="Muted.TLabel", wraplength=400)
-        self.detail.pack(anchor="w", pady=(12, 0))
+        self.detail = ttk.Label(f, text="", style="Muted.TLabel", wraplength=420)
+        self.detail.pack(anchor="w", pady=(10, 0))
 
         self.lines = []
 
     def _expand_on_failure(self):
-        self.bar.stop()
         self.bar.pack_forget()
+        self.pct.pack_forget()
         self.status.configure(text="Something went wrong")
         box = tk.Text(self.frame, height=8, bg="#151922", fg=MUTED, relief="flat",
                       font=("Consolas", 9), wrap="word")
@@ -461,10 +525,13 @@ class ProgressWindow:
         self.root.geometry("560x420")
 
     def _run(self):
+        import progress
+
         def log(msg=""):
             self.q.put(("log", str(msg)))
+        steps = progress.Steps(lambda label, pct: self.q.put(("step", (label, pct))))
         try:
-            self.result = self.work(log)
+            self.result = self.work(log, steps)
             self.q.put(("done", None))
         except Exception as e:
             self.q.put(("log", f"{type(e).__name__}: {e}"))
@@ -478,6 +545,12 @@ class ProgressWindow:
                     self.lines.append(payload)
                     if payload.strip():
                         self.detail.configure(text=payload.strip()[:90])
+                elif kind == "step":
+                    label, pct = payload
+                    if label:
+                        self.status.configure(text=label[:60])
+                    if pct is not None:
+                        self.smooth.set(pct)
                 elif kind == "done":
                     self._finish()
                     return
@@ -487,7 +560,8 @@ class ProgressWindow:
                     return
         except queue.Empty:
             pass
-        self.root.after(80, self._drain)
+        self.smooth.tick()
+        self.root.after(50, self._drain)
 
     def _finish(self):
         if self.wait:
@@ -501,9 +575,48 @@ class ProgressWindow:
         if not self.watch:
             self.root.destroy()
             return
-        self.status.configure(text="Starting Minecraft...")
-        self.detail.configure(text="The game window opens in a moment.")
+        self.smooth.set(self.launch_from)
+        self._enter("prism")
+        self.root.after(50, self._animate)
         self.root.after(500, self._poll_watch)
+
+    def _enter(self, phase):
+        import time
+        self.phase = phase
+        self.phase_start = time.monotonic()
+        if phase == "prism":
+            self.status.configure(text="Starting Prism Launcher...")
+            self.detail.configure(text="")
+        else:
+            self.status.configure(text="Loading Minecraft...")
+            self.detail.configure(text="Loading the mods. The game window opens when "
+                                       "this finishes.")
+
+    def _launch_target(self):
+        """How far along the launch part of the bar should be right now.
+
+        Nothing reports real progress from inside Prism or the JVM, so each phase
+        fills toward its end on a curve that slows as it goes: honest about direction,
+        and it never claims to be done before the game window is actually there.
+        """
+        import math
+        import time
+        t = time.monotonic() - self.phase_start
+        span = 100 - self.launch_from
+        split = self.launch_from + span * self.PRISM_SHARE
+        if self.phase == "prism":
+            return self.launch_from + (split - self.launch_from) * 0.95 * (1 - math.exp(-t / 8))
+        return split + (99 - split) * (1 - math.exp(-t / 25))
+
+    def _animate(self):
+        if self.phase is None:
+            return
+        try:
+            self.smooth.set(self._launch_target())
+            self.smooth.tick()
+        except tk.TclError:
+            return
+        self.root.after(50, self._animate)
 
     def _poll_watch(self):
         try:
@@ -514,12 +627,27 @@ class ProgressWindow:
             outcome = f"error: {type(e).__name__}: {e}"
         if outcome:
             self.outcome = outcome
-            self.root.destroy()
+            self.phase = None
+            if outcome == "open":
+                self.smooth.set(100)
+                self.smooth.shown = 100
+                self.smooth.tick()
+                self.status.configure(text="Minecraft is open")
+                self.root.after(400, self.root.destroy)
+            else:
+                self.root.destroy()
             return
-        if self.watch.elapsed() > self.SLOW_AFTER:
+        import time
+        try:
+            if self.phase == "prism" and self.watch.game_started():
+                self._enter("game")
+        except Exception:
+            pass
+        if (self.phase == "prism"
+                and time.monotonic() - self.phase_start > self.SLOW_AFTER):
+            self.status.configure(text="Preparing Minecraft...")
             self.detail.configure(
-                text="Still starting. The first launch downloads Minecraft and can "
-                     "take several minutes.")
+                text="The first launch downloads Minecraft and can take several minutes.")
         self.root.after(500, self._poll_watch)
 
     def run(self):

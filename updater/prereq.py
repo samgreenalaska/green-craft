@@ -326,14 +326,15 @@ def seed_prism_config(log):
     return True
 
 
-def install_prism(spec, cached, log):
+def install_prism(spec, cached, log, on_bytes=None):
     """spec is manifest.prerequisites.prism[<arch>]: url, sha512, fileSize, filename."""
     a = arch()
     if a not in spec:
         raise RuntimeError(f"no Prism Launcher build listed for {a}")
     s = spec[a]
     log(f"  downloading Prism Launcher {spec.get('version', '')} ({a})...")
-    path, _ = cached(s["sha512"], s["filename"], s["downloads"], s.get("fileSize"))
+    path, _ = cached(s["sha512"], s["filename"], s["downloads"], s.get("fileSize"),
+                     on_bytes=on_bytes)
     log("  running the installer...")
     # NSIS: /S is silent, and Prism installs per-user by default, so no admin prompt.
     r = _run([str(path), "/S"], timeout=1800)

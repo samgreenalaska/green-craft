@@ -44,6 +44,23 @@ def hidden():
     return {"creationflags": CREATE_NO_WINDOW, "startupinfo": si}
 
 
+def hidden_detached():
+    """Keyword arguments for a hidden child that outlives us, like the update swap.
+
+    Not DETACHED_PROCESS. With that flag Windows ignores CREATE_NO_WINDOW, so the
+    child cmd.exe has no console at all, and every console program it then runs
+    (ping, move) allocates a brand new, visible one. That was the string of command
+    prompts popping up during a self-update. A hidden console instead is inherited
+    by everything the script runs, so nothing paints.
+
+    A new process group keeps it out of our Ctrl+C; nothing here ties its life to ours.
+    """
+    CREATE_NEW_PROCESS_GROUP = 0x00000200
+    kw = hidden()
+    kw["creationflags"] |= CREATE_NEW_PROCESS_GROUP
+    return kw
+
+
 def asset(name):
     """Locate a file bundled with --add-data, or None.
 
