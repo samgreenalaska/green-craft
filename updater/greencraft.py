@@ -890,13 +890,30 @@ def main():
                 log(msg)
             return _sync_and_prepare(args, tee)
 
-        _res, failed = _gui.ProgressWindow(_work).run()
+        def _launch(res):
+            # Runs on the GUI thread once the sync succeeds. The window then stays up
+            # until Minecraft's own window exists: Prism's dialog closes the moment
+            # the JVM starts, about ten seconds before the game shows anything, and
+            # that gap looked like the launch had silently failed.
+            prism, inst_id = res
+            if args.no_launch or not prism:
+                return None
+            # The watch is a nicety; it must never be the reason the game doesn't start.
+            try:
+                import gamewatch
+                before = gamewatch.minecraft_windows()
+            except Exception as e:
+                log(f"launch watch unavailable: {type(e).__name__}: {e}")
+                gamewatch = None
+            launch_detached(prism, inst_id)
+            return gamewatch.LaunchWatch(before) if gamewatch else None
+
+        win = _gui.ProgressWindow(_work, wait=_launch)
+        _res, failed = win.run()
         if failed or not _res:
             return 1
-        prism, inst_id = _res
-        if args.no_launch or not prism:
-            return 0
-        launch_detached(prism, inst_id)
+        if win.outcome:
+            log(f"Launch watch ended: {win.outcome}")
         return 0
 
     log(f"Manifest: {args.manifest}")

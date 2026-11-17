@@ -407,10 +407,20 @@ class ProgressWindow:
     clicking GreenCraft would see nothing at all for however long the update takes.
     Closes itself when the work succeeds; stays open with the log if it fails, which
     is the only time the detail is worth reading.
+
+    `wait`, if given, is called on the GUI thread with the work's result once it
+    succeeds. It starts the game and returns an object whose poll() is None while the
+    window should stay up, or a reason string to close it (see gamewatch.LaunchWatch),
+    or returns None itself to close straight away.
     """
 
-    def __init__(self, work, title="GreenCraft"):
+    SLOW_AFTER = 30  # seconds before the "first launch is slow" hint appears
+
+    def __init__(self, work, title="GreenCraft", wait=None):
         self.work = work
+        self.wait = wait
+        self.watch = None
+        self.outcome = None
         self.q = queue.Queue()
         self.result = None
         self.failed = False
@@ -468,7 +478,7 @@ class ProgressWindow:
                     if payload.strip():
                         self.detail.configure(text=payload.strip()[:90])
                 elif kind == "done":
-                    self.root.destroy()
+                    self._finish()
                     return
                 elif kind == "fail":
                     self.failed = True
@@ -477,6 +487,39 @@ class ProgressWindow:
         except queue.Empty:
             pass
         self.root.after(80, self._drain)
+
+    def _finish(self):
+        if self.wait:
+            try:
+                self.watch = self.wait(self.result)
+            except Exception as e:
+                self.lines.append(f"{type(e).__name__}: {e}")
+                self.failed = True
+                self._expand_on_failure()
+                return
+        if not self.watch:
+            self.root.destroy()
+            return
+        self.status.configure(text="Starting Minecraft...")
+        self.detail.configure(text="The game window opens in a moment.")
+        self.root.after(500, self._poll_watch)
+
+    def _poll_watch(self):
+        try:
+            outcome = self.watch.poll()
+        except Exception as e:
+            # A broken watcher must never strand the window: the game is already
+            # starting, so just get out of the way.
+            outcome = f"error: {type(e).__name__}: {e}"
+        if outcome:
+            self.outcome = outcome
+            self.root.destroy()
+            return
+        if self.watch.elapsed() > self.SLOW_AFTER:
+            self.detail.configure(
+                text="Still starting. The first launch downloads Minecraft and can "
+                     "take several minutes.")
+        self.root.after(500, self._poll_watch)
 
     def run(self):
         threading.Thread(target=self._run, daemon=True).start()
