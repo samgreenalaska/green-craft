@@ -30,8 +30,9 @@ TARGETS = {
     },
 }
 
-# Flip to "cavern" at cutover (cavern-migration-plan.md, phase 3).
-DEFAULT = "wheatley"
+# The server moved here from wheatley on 2026-11-17. wheatley stays in TARGETS as the
+# rollback host: GREENCRAFT_SERVER=wheatley.
+DEFAULT = "cavern"
 
 NAME = os.environ.get("GREENCRAFT_SERVER", DEFAULT)
 if NAME not in TARGETS:

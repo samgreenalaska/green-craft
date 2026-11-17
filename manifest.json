@@ -20,11 +20,6 @@
         "fileSize": 22079512,
         "sha512": "7e8f9263b077ab10cb93db789f16b55c4bd10dec18d2ad1a628b72e571c68cb1db4b5fd4e9b80d10a16314116b91196c6b5d4a2bb2e77619a6c54e083e27d11f"
       }
-    },
-    "tailscale": {
-      "method": "winget",
-      "wingetId": "tailscale.tailscale",
-      "fallbackUrl": "https://tailscale.com/download"
     }
   },
   "channels": {
@@ -33,8 +28,11 @@
       "promotedFrom": "0.1.14",
       "server": {
         "name": "GreenCraft",
-        "address": "wheatley.tail334c08.ts.net",
-        "port": 25565
+        "address": "163.192.56.57",
+        "port": 25565,
+        "previousAddresses": [
+          "wheatley.tail334c08.ts.net"
+        ]
       },
       "prismInstanceId": "greencraft-stable",
       "javaArgs": "-Xmx4G",
@@ -496,8 +494,11 @@
       "promotedFrom": null,
       "server": {
         "name": "GreenCraft",
-        "address": "wheatley.tail334c08.ts.net",
-        "port": 25565
+        "address": "163.192.56.57",
+        "port": 25565,
+        "previousAddresses": [
+          "wheatley.tail334c08.ts.net"
+        ]
       },
       "prismInstanceId": "greencraft-experimental",
       "javaArgs": "-Xmx4G",
