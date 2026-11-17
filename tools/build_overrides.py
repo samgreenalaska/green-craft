@@ -27,6 +27,14 @@ DEFAULT_INSTANCE = "tectonic"
 #   servers.dat                     -- the updater writes this from the manifest.
 EXCLUDE_NAMES = {"sodium-fingerprint.json", "xaeropatreon.txt"}
 
+# Hand-made backups left in an instance's config/ (iris.properties.bak-whitewindow, from
+# debugging GLaDOS's virtual display, nearly shipped in 0.1.16). Never seed them.
+BACKUP_MARKERS = (".bak", ".orig", ".old")
+
+
+def is_backup(name):
+    return any(m in name for m in BACKUP_MARKERS)
+
 SEEDED_DIRS = ["config"]
 # The active shader pack's settings file is added by seeded_files(): Iris names it after the
 # pack (photon_v1.3b.zip.txt, photon_v1.4.zip.txt), so a fixed name silently stops seeding
@@ -71,7 +79,7 @@ def collect(inst, dest):
         if not root.is_dir():
             continue
         for src in root.rglob("*"):
-            if src.is_dir() or src.name in EXCLUDE_NAMES:
+            if src.is_dir() or src.name in EXCLUDE_NAMES or is_backup(src.name):
                 continue
             out = dest / src.relative_to(inst)
             out.parent.mkdir(parents=True, exist_ok=True)
