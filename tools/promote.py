@@ -188,7 +188,10 @@ def main():
 
     print("\n=== Next ===")
     print("  1. Join and sanity-check the stable server.")
-    print("  2. publish.bat \"promote " + str(version) + "\"")
+    print("  2. Launch the STABLE instance from the local manifest, not experimental:")
+    print("     python updater/greencraft.py --channel stable --manifest manifest.json --no-gui")
+    print("     A clean experimental run proves the manifest, not stable's own mods/ folder.")
+    print("  3. publish.bat \"promote " + str(version) + "\"")
     print(f"  Rollback: git revert the publish commit, then on {st.NAME}")
     print("    rm -rf server-stable/mods && mv server-stable/mods.prev server-stable/mods")
     print("    mv server-stable/fabric-server-launch.jar.prev server-stable/fabric-server-launch.jar")

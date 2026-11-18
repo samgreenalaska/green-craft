@@ -31,6 +31,12 @@ Updating is a promotion: whatever has been tested on experimental is copied verb
 and committed. The commit diff is the release note. It shows exactly which mods clients are about
 to receive.
 
+The updater only removes files it installed itself. A mod copied into `mods/` by hand stays
+put, so when an update moves the instance to a new Minecraft version, the updater renames
+every mod it did not install to `.jar.disabled`. A mod built for the old version would
+otherwise stop the game before the title screen. Re-enable any that support the new version
+in Prism, under Edit > Mods.
+
 Every file carries a sha512 the client verifies before installing. Nothing is downloaded from
 anywhere but Mojang, Modrinth, CurseForge and GitHub.
 

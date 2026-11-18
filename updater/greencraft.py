@@ -345,20 +345,62 @@ def retarget_pack(pack, deps):
         log(f"  WARNING: could not read {pack.name} ({e}); leaving it alone")
         return False
     moved = []
+    old_mc = None
     for c in comps:
         uid = c.get("uid")
         if uid in want and c.get("version") != want[uid]:
             moved.append(f"{uid.rsplit('.', 1)[-1]} {c.get('version')} -> {want[uid]}")
+            if uid == "net.minecraft":
+                old_mc = c.get("version")
             c["version"] = want[uid]
             for k in [k for k in c if k.startswith("cached")]:
                 del c[k]
     if not moved:
         return False
-    if any(m.startswith("minecraft ") for m in moved):
+    if old_mc is not None:
         data["components"] = [c for c in comps if c.get("uid") != "org.lwjgl3"]
     pack.write_text(json.dumps(data, indent=4) + "\n", encoding="utf-8")
     log("  instance moved: " + ", ".join(moved))
+    if old_mc is not None:
+        disable_strays(pack.parent / "minecraft", old_mc, deps["minecraft"])
     return True
+
+
+def disable_strays(mcdir, old_mc, new_mc):
+    """On a Minecraft version change, disable every mod jar we did not install.
+
+    sync() only ever removes files it installed itself, so a jar copied in by hand
+    survives every update. Built for the old game, it then stops the new one at
+    Fabric's "Incompatible mods found!" before the title screen: GreenCraft 0.2.0
+    moved stable to 26.3 and a hand-installed gcarmfix (26.2 only) did exactly that.
+    Testing experimental could not catch it, being a different instance without the
+    jar.
+
+    Renaming to .jar.disabled is Prism's own convention: the mod still shows in Edit >
+    Mods and comes back with one click if it does support the new version. Without a
+    lockfile there is no telling ours from theirs, so nothing is touched.
+    """
+    mods = mcdir / "mods"
+    if not mods.is_dir() or not (mcdir / ".greencraft" / "installed.json").exists():
+        return []
+    owned = load_lock(mcdir).get("files", {})
+    done = []
+    for p in sorted(mods.glob("*.jar")):
+        if not p.is_file() or f"mods/{p.name}" in owned:
+            continue
+        try:
+            os.replace(p, p.with_name(p.name + ".disabled"))
+        except OSError as e:
+            log(f"  WARNING: could not disable {p.name} ({e})")
+            continue
+        done.append(p.name)
+    if done:
+        log(f"  Minecraft {old_mc} -> {new_mc}: disabled {len(done)} mod(s) GreenCraft"
+            " did not install, which would likely stop the new version from starting:")
+        for n in done:
+            log(f"    {n}")
+        log("  Re-enable in Prism (Edit > Mods) any that support Minecraft " + new_mc + ".")
+    return done
 
 
 def ensure_instance(inst_root, channel_name, deps, java_args):
