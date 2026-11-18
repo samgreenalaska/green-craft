@@ -270,6 +270,146 @@ def split_java_args(java_args):
     return lo, hi, " ".join(rest)
 
 
+# Heap caps earlier manifests wrote into new instances. An existing instance still on
+# one of these is on the pack's default, not a choice its owner made, so a raised cap in
+# the manifest may move it. Any other value was set by hand and is left alone.
+PREVIOUS_PACK_HEAP_MB = {4096}
+
+
+def _gc_flags(args):
+    """The -XX:+Use...GC selector(s) in an argument string."""
+    return [t for t in (args or "").split()
+            if t.lower().startswith("-xx:+use") and t.lower().endswith("gc")]
+
+
+def upgrade_instance_jvm(cfg, hi, rest, log=lambda m="": None):
+    """Carry manifest JVM changes into an instance.cfg that already exists.
+
+    ensure_instance never rewrites instance.cfg wholesale, because it holds the user's
+    own settings. Two things are still the pack's to move:
+
+      * the garbage collector -- added only when JvmArgs names none, so a collector
+        someone picked by hand is never replaced;
+      * the heap cap -- raised only from a value an earlier manifest wrote
+        (PREVIOUS_PACK_HEAP_MB), and only while OverrideMemory is on.
+
+    Returns True if the file changed.
+    """
+    try:
+        text = cfg.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    lines = text.splitlines()
+
+    def get(key):
+        for ln in lines:
+            if ln.startswith(key + "="):
+                return ln.split("=", 1)[1]
+        return None
+
+    def put(key, value):
+        for i, ln in enumerate(lines):
+            if ln.startswith(key + "="):
+                lines[i] = f"{key}={value}"
+                return
+        # New keys go at the end of [General], which is where Prism keeps them.
+        at = len(lines)
+        for i, ln in enumerate(lines):
+            if i > 0 and ln.startswith("[") and ln.strip() != "[General]":
+                at = i
+                while at > 0 and not lines[at - 1].strip():
+                    at -= 1
+                break
+        lines.insert(at, f"{key}={value}")
+
+    changed = []
+    want_gc = _gc_flags(rest)
+    if want_gc:
+        current = get("JvmArgs") or ""
+        if not _gc_flags(current):
+            put("JvmArgs", " ".join([*current.split(), *want_gc]))
+            put("OverrideJavaArgs", "true")
+            changed.append("added " + " ".join(want_gc))
+
+    if hi and (get("OverrideMemory") or "").lower() == "true":
+        try:
+            cur = int(get("MaxMemAlloc") or 0)
+        except ValueError:
+            cur = 0
+        if cur in PREVIOUS_PACK_HEAP_MB and hi > cur:
+            put("MaxMemAlloc", str(hi))
+            changed.append(f"memory cap {cur} -> {hi} MB")
+
+    if changed:
+        cfg.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        log("  instance.cfg: " + ", ".join(changed))
+    return bool(changed)
+
+
+# Distant Horizons on one thread at half duty cannot keep up with voxymap streaming
+# LOD into it: every terrain read voxymap's map sweep makes queues behind the ingest
+# on DH's file-handler pool and never returns, so the world map stays empty. Measured
+# on a Snapdragon X, 2026-11-17: authored=0 for a whole session at 1 thread / 0.5,
+# map filling normally at 4 / 1.0. DH's own default is half the cores at 1.0, so this
+# only catches an instance that was turned down to the floor.
+DH_MIN_THREADS = 4
+
+
+def tune_dh_threads(mcdir, log=lambda m="": None):
+    """Lift DH's thread pool off the setting that starves voxymap. Returns True if changed."""
+    cfg = Path(mcdir) / "config" / "DistantHorizons.toml"
+    try:
+        raw = cfg.read_bytes()
+    except OSError:
+        return False  # DH not installed here, or never run yet
+    text = raw.decode("utf-8", errors="replace")
+    nl = "\r\n" if "\r\n" in text else "\n"
+    lines = text.split(nl)
+
+    section = None
+    threads_at = ratio_at = None
+    for i, ln in enumerate(lines):
+        s = ln.strip()
+        if s.startswith("["):
+            section = s
+        elif section == "[common.multiThreading]":
+            if s.startswith("numberOfThreads"):
+                threads_at = i
+            elif s.startswith("threadRunTimeRatio"):
+                ratio_at = i
+    if threads_at is None:
+        return False
+
+    def value(i):
+        return lines[i].split("=", 1)[1].strip().strip('"')
+
+    try:
+        threads = int(value(threads_at))
+    except ValueError:
+        return False
+    if threads > 1:
+        return False  # anything above the floor was a deliberate choice; leave it
+
+    want = max(1, min(DH_MIN_THREADS, (os.cpu_count() or 2) // 2))
+    if want <= threads:
+        return False
+    indent = lines[threads_at][:len(lines[threads_at]) - len(lines[threads_at].lstrip())]
+    lines[threads_at] = f"{indent}numberOfThreads = {want}"
+    msg = f"Distant Horizons threads {threads} -> {want}"
+    if ratio_at is not None:
+        try:
+            ratio = float(value(ratio_at))
+        except ValueError:
+            ratio = 1.0
+        if ratio < 1.0:
+            indent = lines[ratio_at][:len(lines[ratio_at]) - len(lines[ratio_at].lstrip())]
+            lines[ratio_at] = f'{indent}threadRunTimeRatio = "1.0"'
+            msg += f", run-time ratio {ratio:g} -> 1.0"
+    cfg.write_bytes(nl.join(lines).encode("utf-8"))
+    log("  " + msg)
+    return True
+
+
 def asset(name):
     """Bundled data file, or None. Implemented in procenv so install.py shares it."""
     import procenv
@@ -492,7 +632,9 @@ def ensure_instance(inst_root, channel_name, deps, java_args):
         if changed:
             cfg.write_text("\n".join(out) + "\n", encoding="utf-8")
             log("  repaired instance.cfg: moved memory flags out of JvmArgs")
+        upgrade_instance_jvm(cfg, hi, rest, log)
 
+    tune_dh_threads(inst_root / "minecraft", log)
     return created_pack or created_cfg
 
 
