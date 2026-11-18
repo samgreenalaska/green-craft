@@ -454,19 +454,19 @@
             "x-excluded-reason": "crashes on world join uploading LOD geometry; also x86-64-only natives"
           },
           {
-            "path": "mods/voxymap-0.10.1.jar",
+            "path": "mods/voxymap-0.10.3.jar",
             "hashes": {
-              "sha1": "78baf101b7eeccc3402f202d19b98a2b48e7c507",
-              "sha512": "32996d019ce926a5dfc1b0ce5f7953f6f88c760c6ace402ac39d46be2ee15b7c0618631b92baa7a3b7cf6a674973cafdded6abe5fd3576836c19af9d29afffaf"
+              "sha1": "aed2f199ca9ace5aeed7e9e8432e37df88fba2ac",
+              "sha512": "716d5384be5d7d08554342f18360f5bb4ed0af0dcff55138a6c9f9b6329d3947c81b737098e5ffe00a0803eac7a769375928f3e2b94273a7e23cd0f7d82d4c80"
             },
             "env": {
               "client": "required",
               "server": "required"
             },
             "downloads": [
-              "https://github.com/samgreenalaska/voxymap/releases/download/v0.10.1/voxymap-0.10.1.jar"
+              "https://github.com/samgreenalaska/voxymap/releases/download/v0.10.3/voxymap-0.10.3.jar"
             ],
-            "fileSize": 268962
+            "fileSize": 270754
           },
           {
             "path": "mods/xaerominimap-fabric-26.3-26.6.2.jar",
@@ -966,19 +966,19 @@
             "x-excluded-reason": "crashes on world join uploading LOD geometry; also x86-64-only natives"
           },
           {
-            "path": "mods/voxymap-0.10.1.jar",
+            "path": "mods/voxymap-0.10.3.jar",
             "hashes": {
-              "sha1": "78baf101b7eeccc3402f202d19b98a2b48e7c507",
-              "sha512": "32996d019ce926a5dfc1b0ce5f7953f6f88c760c6ace402ac39d46be2ee15b7c0618631b92baa7a3b7cf6a674973cafdded6abe5fd3576836c19af9d29afffaf"
+              "sha1": "aed2f199ca9ace5aeed7e9e8432e37df88fba2ac",
+              "sha512": "716d5384be5d7d08554342f18360f5bb4ed0af0dcff55138a6c9f9b6329d3947c81b737098e5ffe00a0803eac7a769375928f3e2b94273a7e23cd0f7d82d4c80"
             },
             "env": {
               "client": "required",
               "server": "required"
             },
             "downloads": [
-              "https://github.com/samgreenalaska/voxymap/releases/download/v0.10.1/voxymap-0.10.1.jar"
+              "https://github.com/samgreenalaska/voxymap/releases/download/v0.10.3/voxymap-0.10.3.jar"
             ],
-            "fileSize": 268962
+            "fileSize": 270754
           },
           {
             "path": "mods/xaerominimap-fabric-26.3-26.6.2.jar",
