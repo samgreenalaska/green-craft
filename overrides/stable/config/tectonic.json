@@ -72,10 +72,9 @@
     "vertical_scale": 1.125
   },
   "islands": {
-    "enabled": true,
-    "noise_multiplier": 1.0,
-    "noise_offset": 0.0,
-    "noise_scale": 0.11
+    // The average distance between two islands, measured in blocks. The minimum distance is always 640 blocks.
+    "average_distance": 1536,
+    "enabled": true
   },
   "minor_version": 1,
   "oceans": {
